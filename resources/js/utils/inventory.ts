@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export type NumberLike = number | string | undefined | null;
 
 export function toNum(n: NumberLike): number {
@@ -7,13 +8,14 @@ export function toNum(n: NumberLike): number {
     return isNaN(v) ? 0 : v;
 }
 
-export type PurchaseLine = {
-    qty_ordered: NumberLike;
-    unit_cost: NumberLike;
-    discount_pct?: NumberLike;
-    discount_amount?: NumberLike; // opcional si calculas por pct
-    tax_pct?: NumberLike;
-};
+export interface PurchaseLine {
+    product_variant_id: number | null; // <-- AÑADE ESTA LÍNEA
+    qty_ordered: number | string;
+    unit_cost: number | string;
+    discount_pct?: number | string;
+    tax_pct?: number | string;
+    [key: string]: any; // Permite otras propiedades
+}
 
 export function lineCalc(row: PurchaseLine) {
     const qty = Math.max(0, toNum(row.qty_ordered));
@@ -33,20 +35,35 @@ export function lineCalc(row: PurchaseLine) {
     return { base, discAmount, taxAmount, total };
 }
 
-export function purchaseTotals(items: PurchaseLine[], freight: NumberLike = 0, otherCosts: NumberLike = 0) {
-    const acc = items.reduce(
-        (a, it) => {
-            const { base, discAmount, taxAmount, total } = lineCalc(it);
-            a.subtotal += base;
-            a.discount_total += discAmount;
-            a.tax_total += taxAmount;
-            a.line_total += total;
-            return a;
-        },
-        { subtotal: 0, discount_total: 0, tax_total: 0, line_total: 0 },
-    );
-    const grand_total = acc.subtotal - acc.discount_total + acc.tax_total + toNum(freight) + toNum(otherCosts);
-    return { ...acc, grand_total };
+export function purchaseTotals(items: PurchaseLine[], freight: number | string = 0, other_costs: number | string = 0) {
+    const calculatedItems = items.map((item) => {
+        const qty = toNum(item.qty_ordered);
+        const cost = toNum(item.unit_cost);
+        const discountPct = toNum(item.discount_pct);
+        const taxPct = toNum(item.tax_pct);
+
+        const base = qty * cost;
+        const discountAmount = base * (discountPct / 100);
+        const taxableBase = base - discountAmount;
+        const taxAmount = taxableBase * (taxPct / 100);
+        const line_total = taxableBase + taxAmount;
+
+        return { ...item, line_total, discount_amount: discountAmount, tax_amount: taxAmount };
+    });
+
+    const subtotal = calculatedItems.reduce((acc, item) => acc + toNum(item.qty_ordered) * toNum(item.unit_cost), 0);
+    const discount_total = calculatedItems.reduce((acc, item) => acc + item.discount_amount, 0);
+    const tax_total = calculatedItems.reduce((acc, item) => acc + item.tax_amount, 0);
+
+    const grand_total = subtotal - discount_total + tax_total + toNum(freight) + toNum(other_costs);
+
+    return {
+        calculatedItems, // El nuevo array con los totales de línea
+        subtotal,
+        discount_total,
+        tax_total,
+        grand_total,
+    };
 }
 
 export function money(v: NumberLike, min = 2, max = 2) {

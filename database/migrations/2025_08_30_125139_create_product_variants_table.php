@@ -30,8 +30,8 @@ return new class extends Migration
 
             $table->timestamps();
 
-            $table->index('sku');
-            $table->index('barcode');
+            // $table->index('sku');
+            // $table->index('barcode');
         });
     }
 

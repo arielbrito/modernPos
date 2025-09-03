@@ -5,16 +5,31 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Casts\Attribute; // 1. Importar Attribute
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage; // 2. Importar Storage
 
 class ProductVariant extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['produc_id', 'sku', 'barcode', 'attributes', 'cost_price', 'selling_price', 'image_path'];
+    protected $fillable = [
+        'product_id',
+        'sku',
+        'barcode',
+        'attributes',
+        'cost_price',
+        'selling_price',
+        'average_cost',
+        'last_cost',
+        'image_path'
+    ];
 
     protected $casts = [
-        'attributes' => 'array', // Para que Laravel trate el JSON como un array
+        'attributes'    => 'array',
+        'cost_price'    => 'decimal:2',
+        'selling_price' => 'decimal:2',
+        'average_cost'  => 'decimal:4',
+        'last_cost'     => 'decimal:4',
     ];
 
     protected function imageUrl(): Attribute
@@ -39,6 +54,11 @@ class ProductVariant extends Model
 
     public function inventory()
     {
-        return $this->hasMany(Inventory::class);
+        return $this->hasMany(Inventory::class, 'product_variant_id');
+    }
+
+    public function movements(): HasMany
+    {
+        return $this->hasMany(ProductStockMovement::class, 'product_variant_id');
     }
 }

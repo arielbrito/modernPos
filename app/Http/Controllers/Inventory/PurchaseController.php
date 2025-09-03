@@ -75,9 +75,16 @@ class PurchaseController extends Controller
     {
         $data = $request->validated();
         $userId = Auth::id();
+        $storeId = session('active_store_id');
 
-        return DB::transaction(function () use ($data, $userId) {
+        if (!$storeId) {
+            // Esto podría ser un error o una redirección, dependiendo de tu preferencia.
+            return back()->with('error', 'No se ha seleccionado una tienda activa. Por favor, selecciona una tienda para continuar.');
+        }
+
+        return DB::transaction(function () use ($data, $userId, $storeId) {
             $code = $this->nextCode();
+
 
             $purchase = Purchase::create([
                 'supplier_id' => $data['supplier_id'],
@@ -91,6 +98,7 @@ class PurchaseController extends Controller
                 'other_costs' => $data['other_costs'] ?? 0,
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $userId,
+                'store_id' => $storeId,
             ]);
 
             $subtotal = 0;
@@ -174,6 +182,11 @@ class PurchaseController extends Controller
 
     public function storePayment(Purchase $purchase, StorePurchasePaymentRequest $request)
     {
+        if (!in_array($purchase->status, ['received', 'partially_received'])) {
+            throw ValidationException::withMessages([
+                'status' => 'No se pueden registrar pagos en una compra que aún no ha sido recibida.'
+            ]);
+        }
         $data = $request->validated();
         $amount = (float)$data['paid_amount'];
 

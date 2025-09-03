@@ -23,6 +23,7 @@ class StorePurchaseRequest extends FormRequest
     {
         return [
             'supplier_id' => ['required', 'exists:suppliers,id'],
+            'store_id' => ['require', 'exist:stores, id'],
             'invoice_number' => ['nullable', 'string', 'max:255'],
             'invoice_date' => ['nullable', 'date'],
             'currency' => ['required', 'string', 'size:3'],

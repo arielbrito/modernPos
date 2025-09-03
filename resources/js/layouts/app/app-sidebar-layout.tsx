@@ -8,9 +8,10 @@ import { useEffect, type PropsWithChildren } from 'react';
 import { usePage } from '@inertiajs/react';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
+import StoreSwitcher from '@/components/store-switcher'; // 👈 importa el switcher
 
 export default function AppSidebarLayout({ children, breadcrumbs = [] }: PropsWithChildren<{ breadcrumbs?: BreadcrumbItem[] }>) {
-    const { props } = usePage();
+    const { props, url } = usePage();
     useEffect(() => {
         const successMessage = (props.flash as any)?.success;
         if (successMessage) {
@@ -27,11 +28,14 @@ export default function AppSidebarLayout({ children, breadcrumbs = [] }: PropsWi
             });
         }
     }, [props.flash]);
+
+    const pathname = (url as string)?.split('?')[0];
+    const showSwitcher = pathname !== '/select-store';
     return (
         <AppShell variant="sidebar">
             <AppSidebar />
             <AppContent variant="sidebar" className="overflow-x-hidden">
-                <AppSidebarHeader breadcrumbs={breadcrumbs} />
+                <AppSidebarHeader breadcrumbs={breadcrumbs} right={showSwitcher ? <StoreSwitcher /> : null} />
                 {children}
             </AppContent>
             <Toaster position="top-right" richColors />

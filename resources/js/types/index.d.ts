@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { InertiaLinkProps } from '@inertiajs/react';
 import { LucideIcon } from 'lucide-react';
+import { JSX } from 'react/jsx-runtime';
 
 export interface Auth {
     user: User;
@@ -36,6 +37,10 @@ export interface SharedData {
     };
     [key: string]: unknown;
 }
+export interface Role {
+    id: number;
+    name: string;
+}
 
 export interface User {
     id: number;
@@ -45,6 +50,8 @@ export interface User {
     email_verified_at: string | null;
     created_at: string;
     updated_at: string;
+    role_id: number;
+    role: Role;
     [key: string]: unknown; // This allows for additional properties...
 }
 
@@ -74,6 +81,8 @@ export interface ProductVariant {
 // Define la estructura del Producto principal
 // Define la estructura del Producto principal
 export interface Product {
+    created_at: any;
+    updated_at: any;
     id: number;
     name: string;
     slug: string;
@@ -84,6 +93,7 @@ export interface Product {
     supplier_id: number | null;
 
     type: 'simple' | 'variable';
+    is_active: boolean;
 
     // Relaciones eager-loaded (opcionales)
     category?: Category | null;
@@ -94,8 +104,11 @@ export interface Product {
 }
 
 export type PaginatedResponse<T> = {
+    index: any;
     data: T[];
     links: {
+        length: number;
+        map(arg0: (link: any, idx: any) => JSX.Element): import('react').ReactNode;
         first: string;
         last: string;
         prev: string | null;
@@ -126,11 +139,14 @@ export interface Supplier {
 export interface Store {
     id: number;
     name: string;
+    code?: string | null;
     rnc: string;
+    email?: string | null;
     phone?: string | null;
     address?: string | null;
     currency: string;
-    logo?: string | null;
+    logo?: File | null;
+    logo_url?: string | null;
     is_active: boolean;
 }
 

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import SupplierController from "@/actions/App/Http/Controllers/Inventory/SupplierController";
+import { Switch } from "@/components/ui/switch";
 
 export type Supplier = {
     id?: number;
@@ -18,7 +19,8 @@ export type Supplier = {
     phone?: string | null;
     email?: string | null;
     address?: string | null;
-    notes?: string | null;
+    is_active: boolean;
+
 };
 
 export function SupplierForm({
@@ -36,11 +38,11 @@ export function SupplierForm({
         id: supplier?.id ?? 0,
         name: supplier?.name ?? "",
         rnc: supplier?.rnc ?? "",
-        contact_name: supplier?.contact_person ?? "",
+        contact_person: supplier?.contact_person ?? "",
         phone: supplier?.phone ?? "",
         email: supplier?.email ?? "",
         address: supplier?.address ?? "",
-        notes: supplier?.notes ?? "",
+        is_active: supplier?.is_active ?? "",
     } as any);
 
     React.useEffect(() => {
@@ -49,11 +51,11 @@ export function SupplierForm({
             id: supplier?.id ?? 0,
             name: supplier?.name ?? "",
             rnc: supplier?.rnc ?? "",
-            contact_name: supplier?.contact_person ?? "",
+            contact_person: supplier?.contact_person ?? "",
             phone: supplier?.phone ?? "",
             email: supplier?.email ?? "",
             address: supplier?.address ?? "",
-            notes: supplier?.notes ?? "",
+            is_active: supplier?.is_active ?? "",
         } as any);
         clearErrors();
     }, [supplier]);
@@ -89,7 +91,7 @@ export function SupplierForm({
                 </DialogHeader>
                 <form onSubmit={submit} className="grid gap-3">
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                        <div>
+                        <div className="md:col-span-2">
                             <Label>Nombre</Label>
                             <Input value={data.name} onChange={(e) => setData("name", e.target.value)} />
                             {errors.name && <p className="text-xs text-rose-600 mt-1">{errors.name}</p>}
@@ -100,7 +102,7 @@ export function SupplierForm({
                             {errors.rnc && <p className="text-xs text-rose-600 mt-1">{errors.rnc}</p>}
                         </div>
                         <div>
-                            <Label>Contacto</Label>
+                            <Label>Persona de Contacto</Label>
                             <Input value={data.contact_person || ""} onChange={(e) => setData("contact_person", e.target.value)} />
                         </div>
                         <div>
@@ -116,9 +118,12 @@ export function SupplierForm({
                             <Label>Dirección</Label>
                             <Textarea rows={2} value={data.address || ""} onChange={(e) => setData("address", e.target.value)} />
                         </div>
-                        <div className="md:col-span-2">
-                            <Label>Notas</Label>
-                            <Textarea rows={2} value={data.notes || ""} onChange={(e) => setData("notes", e.target.value)} />
+                        <div className="flex items-center gap-2">
+                            <Label>Activo</Label>
+                            <Switch
+                                checked={data.is_active}
+                                onCheckedChange={(checked) => setData('is_active', checked)}
+                            />
                         </div>
                     </div>
                     <DialogFooter>

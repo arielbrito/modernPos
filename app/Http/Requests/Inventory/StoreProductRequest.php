@@ -22,21 +22,23 @@ class StoreProductRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // Reglas para el producto "padre"
-            'name'          => ['required', 'string', 'max:255'],
-            'slug'          => ['required', 'string', 'max:255', 'unique:products,slug'],
-            'description'   => ['nullable', 'string'],
-            'category_id'   => ['nullable', 'integer', 'exists:categories,id'],
-            'supplier_id'   => ['nullable', 'integer', 'exists:suppliers,id'],
-            'type'          => ['required', 'string', 'in:simple,variable'],
-            'image'         => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:2048'],
+            'name'                  => ['required', 'string', 'max:255'],
+            'slug'                  => ['nullable', 'string', 'max:255', 'unique:products,slug'],
+            'description'           => ['nullable', 'string'],
+            'category_id'           => ['nullable', 'exists:categories,id'],
+            'supplier_id'           => ['nullable', 'exists:suppliers,id'],
+            'type'                  => ['required', 'in:simple,variable'],
+            'unit'                  => ['nullable', 'string', 'max:50'],
+            'is_active'             => ['boolean'],
 
-            // Reglas para el array de variantes
-            'variants'                 => ['required', 'array', 'min:1'],
-            'variants.*.sku'           => ['required', 'string', 'max:100', 'distinct', 'unique:product_variants,sku'],
+            'image'                 => ['nullable', 'image', 'max:2048'],
+
+            'variants'              => ['required', 'array', 'min:1'],
+            'variants.*.sku'        => ['required', 'string', 'max:100', 'unique:product_variants,sku'],
+            'variants.*.barcode'    => ['nullable', 'string', 'max:100', 'unique:product_variants,barcode'],
             'variants.*.selling_price' => ['required', 'numeric', 'min:0'],
-            'variants.*.cost_price'    => ['required', 'numeric', 'min:0'],
-            'variants.*.attributes'    => ['nullable', 'string'],
+            'variants.*.cost_price'    => ['nullable', 'numeric', 'min:0'],
+            'variants.*.attributes'    => ['nullable'], // string o array
         ];
     }
 }

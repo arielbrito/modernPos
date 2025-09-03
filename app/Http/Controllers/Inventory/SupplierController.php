@@ -98,7 +98,7 @@ class SupplierController extends Controller
             'total'   => $open->sum('balance_total'),
         ];
 
-        return inertia('admin/suppliers/show', [
+        return inertia('inventory/suppliers/show', [
             'supplier'      => $supplier,
             'openPurchases' => $open,
             'account'       => $account,

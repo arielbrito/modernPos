@@ -5,13 +5,15 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, Sid
 import { dashboard } from '@/routes';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, Package, ScanBarcode, ShoppingBag, ShoppingCart, SquareStack, Users } from 'lucide-react';
+import { BookOpen, Folder, LayoutGrid, Package, ScanBarcode, Settings, ShoppingBag, ShoppingCart, SquareStack, Store, Users, Users2 } from 'lucide-react';
 import AppLogo from './app-logo';
 import products from '@/routes/inventory/products';
 import categories from '@/routes/inventory/categories';
 import pos from '@/routes/pos';
 import purchases from '@/routes/inventory/purchases';
 import suppliers from '@/routes/inventory/suppliers';
+import stores from '@/routes/stores';
+import users from '@/routes/users';
 
 const mainNavItems: NavItem[] = [
     {
@@ -26,7 +28,7 @@ const mainNavItems: NavItem[] = [
     },
 
     {
-        title: 'Inventory',
+        title: 'Inventario',
         icon: Package,
         children: [
             {
@@ -49,6 +51,34 @@ const mainNavItems: NavItem[] = [
                 href: purchases.create.url(),
                 icon: ShoppingBag,
             },
+
+        ]
+    },
+
+    {
+        title: 'Configuraciones',
+        icon: Settings,
+        children: [
+            {
+                title: 'Tiendas',
+                href: stores.index.url(),
+                icon: Store,
+            },
+            {
+                title: 'Usuarios',
+                href: users.index.url(),
+                icon: Users2,
+            },
+            // {
+            //     title: 'Proveedores',
+            //     href: suppliers.index.url(),
+            //     icon: Users,
+            // },
+            // {
+            //     title: 'Compras',
+            //     href: purchases.create.url(),
+            //     icon: ShoppingBag,
+            // },
 
         ]
     },

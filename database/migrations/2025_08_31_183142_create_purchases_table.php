@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('purchases', function (Blueprint $table) {
             $table->id();
             $table->foreignId('supplier_id')->constrained()->cascadeOnUpdate()->restrictOnDelete();
+            $table->foreignId('store_id')->constrained()->cascadeOnUpdate()->restrictOnDelete();
             $table->string('code')->unique(); // PO-000123
             $table->enum('status', ['draft', 'approved', 'partially_received', 'received', 'cancelled'])->default('draft');
             $table->string('invoice_number')->nullable();

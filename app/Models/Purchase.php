@@ -13,6 +13,7 @@ class Purchase extends Model
 
     protected $fillable = [
         'supplier_id',
+        'store_id',
         'code',
         'status',
         'invoice_number',
@@ -60,5 +61,10 @@ class Purchase extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function store(): BelongsTo
+    {
+        return $this->belongsTo(Store::class);
     }
 }

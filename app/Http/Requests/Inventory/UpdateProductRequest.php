@@ -25,37 +25,39 @@ class UpdateProductRequest extends FormRequest
     {
         $productId = $this->route('product')->id;
 
-        $rules = [
-            'name'          => ['required', 'string', 'max:255'],
-            'slug'          => ['required', 'string', 'max:255', Rule::unique('products')->ignore($productId)],
-            'description'   => ['nullable', 'string'],
-            'category_id'   => ['nullable', 'integer', 'exists:categories,id'],
-            'type'          => ['required', 'string', 'in:simple,variable'],
-            'image'         => ['nullable', 'image', 'mimes:jpeg,png,jpg,webp', 'max:2048'],
+        return [
+            'name'        => ['required', 'string', 'max:255'],
+            'slug'        => ['nullable', 'string', 'max:255', "unique:products,slug,{$productId}"],
+            'description' => ['nullable', 'string'],
+            'category_id' => ['nullable', 'exists:categories,id'],
+            'supplier_id' => ['nullable', 'exists:suppliers,id'],
+            'type'        => ['required', 'in:simple,variable'],
+            'unit'        => ['nullable', 'string', 'max:50'],
+            'is_active'   => ['boolean'],
 
-            // Reglas para el array de variantes
-            'variants'                 => ['required', 'array', 'min:1'],
-            'variants.*.selling_price' => ['required', 'numeric', 'min:0'],
-            'variants.*.cost_price'    => ['required', 'numeric', 'min:0'],
-            'variants.*.attributes'    => ['nullable', 'string'],
-        ];
+            'image'       => ['nullable', 'image', 'max:2048'],
 
-        // Añadir reglas de SKU únicas para cada variante dinámicamente
-        foreach ($this->input('variants', []) as $index => $variant) {
-            // El 'id' de la variante solo existirá si es una variante preexistente
-            $variantId = $variant['id'] ?? null;
-
-            $rules["variants.{$index}.sku"] = [
+            'variants'    => ['required', 'array', 'min:1'],
+            'variants.*.id'            => ['nullable', 'exists:product_variants,id'],
+            'variants.*.sku'           => [
                 'required',
                 'string',
                 'max:100',
-                'distinct', // Único dentro del array enviado
-                Rule::unique('product_variants', 'sku')->ignore($variantId) // Único en la DB, ignorando la propia variante
-            ];
-        }
-
-        return $rules;
+                function ($attr, $value, $fail) use ($productId) {
+                    // Permitir el mismo SKU si es de la misma variante o cambiar a otro único
+                    $exists = \App\Models\ProductVariant::where('sku', $value)
+                        ->whereHas('product', fn($q) => $q->where('id', '!=', $productId))
+                        ->exists();
+                    if ($exists) $fail('El SKU ya está en uso.');
+                }
+            ],
+            'variants.*.barcode'       => ['nullable', 'string', 'max:100'],
+            'variants.*.selling_price' => ['required', 'numeric', 'min:0'],
+            'variants.*.cost_price'    => ['nullable', 'numeric', 'min:0'],
+            'variants.*.attributes'    => ['nullable'],
+        ];
     }
+
 
     protected function prepareForValidation(): void
     {

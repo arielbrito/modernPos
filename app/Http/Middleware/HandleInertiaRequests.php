@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Store;
+use App\Models\User;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Session;
@@ -45,6 +47,23 @@ class HandleInertiaRequests extends Middleware
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
                 'user' => $request->user(),
+                'permissions' => [
+                    'user' => [
+                        'viewAny' => fn() => $request->user()?->can('viewAny', User::class) ?? false,
+                        'create'  => fn() => $request->user()?->can('create',  User::class) ?? false,
+                    ],
+                    'store' => [
+                        'viewAny' => fn() => $request->user()?->can('viewAny', Store::class) ?? false,
+                        'create'  => fn() => $request->user()?->can('create',  Store::class) ?? false,
+                    ],
+                ],
+                'stores_active' => fn() => $request->user()
+                    ? $request->user()->stores()
+                    ->select('stores.id', 'stores.name', 'stores.code', 'stores.logo', 'stores.is_active')
+                    ->where('stores.is_active', true)
+                    ->orderBy('stores.name')
+                    ->get()
+                    : [],
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
 
@@ -52,6 +71,51 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn() => Session::get('success'),
                 'error' => fn() => Session::get('error'),
             ],
+
+            'active_store' => fn() => $this->buildActiveStore($request),
+        ];
+    }
+
+
+
+    /**
+     * Devuelve la tienda activa como array liviano o null.
+     */
+    private function buildActiveStore(Request $request): ?array
+    {
+        // No hay usuario => nada que compartir
+        if (! $request->user()) {
+            return null;
+        }
+
+        // 1) Si el middleware EnsureStoreIsSelected la adjuntó, úsala
+        $s = $request->attributes->get('active_store'); // puede ser Store|null
+
+        // 2) Si no estaba adjunta, intentamos con el id en sesión
+        if (! $s) {
+            $id = $request->session()->get('active_store_id');
+            if (! $id) {
+                return null;
+            }
+
+            // Verificamos pertenencia + obtenemos solo lo necesario
+            $s = $request->user()->stores()
+                ->select('stores.id', 'stores.name', 'stores.code', 'stores.logo', 'stores.is_active')
+                ->where('stores.id', $id)
+                ->first();
+        }
+
+        if (! $s) {
+            return null;
+        }
+
+        // Regresa solo lo que el front necesita (incluye accessor logo_url)
+        return [
+            'id'        => $s->id,
+            'name'      => $s->name,
+            'code'      => $s->code,
+            'logo_url'  => $s->logo_url,   // accessor de tu modelo Store
+            'is_active' => (bool) $s->is_active,
         ];
     }
 }

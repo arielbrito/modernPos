@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use Illuminate\Foundation\Support\Providers\RouteServiceProvider;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -30,10 +31,27 @@ class AuthenticatedSessionController extends Controller
     public function store(LoginRequest $request): RedirectResponse
     {
         $request->authenticate();
-
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        $user   = $request->user();
+        $stores = $user->stores()
+            ->select('stores.id', 'stores.is_active')
+            ->where('stores.is_active', true)
+            ->get();
+
+        if ($stores->isEmpty()) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            return back()->withErrors(['email' => 'No tienes ninguna tienda activa asignada.']);
+        }
+
+        if ($stores->count() === 1) {
+            $request->session()->put('active_store_id', $stores->first()->id);
+            return redirect()->intended(route('dashboard', absolute: false));
+        }
+
+        return redirect()->route('store.selector');
     }
 
     /**

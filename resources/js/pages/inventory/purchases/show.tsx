@@ -126,7 +126,7 @@ export default function Show({ purchase }: Props) {
     const canBeApproved = purchase.status === "draft";
     const canBeCancelled = !["received", "partially_received", "cancelled"].includes(purchase.status);
     const canReceiveItems = ["approved", "partially_received"].includes(purchase.status) && pendingItemsToReceive.length > 0;
-    const canMakePayment = purchase.balance_total > 0 && ["approved", "partially_received", "received"].includes(purchase.status);
+    const canMakePayment = purchase.balance_total > 0 && ["partially_received", "received"].includes(purchase.status);
 
     // --- ACCIONES (MEMOIZADAS Y CON FEEDBACK MODERNO) ---
     const approveAction = React.useCallback(() => {
@@ -218,7 +218,7 @@ export default function Show({ purchase }: Props) {
                                         <TableRow key={it.id}>
                                             <TableCell className="font-medium">
                                                 <div className="font-semibold">{it.product_variant?.product?.name ?? "Producto no disponible"}</div>
-                                                <div className="text-xs text-muted-foreground">{it.product?.code}</div>
+                                                <div className="text-xs text-muted-foreground">{it.product_variant?.sku}</div>
                                             </TableCell>
                                             <TableCell className="text-right">{it.qty_ordered}</TableCell>
                                             <TableCell className="text-right">{it.qty_received}</TableCell>
