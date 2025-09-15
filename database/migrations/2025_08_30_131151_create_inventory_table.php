@@ -15,13 +15,15 @@ return new class extends Migration
 
         Schema::create('inventory', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('store_id')->constrained('stores')->onDelete('cascade');
-            $table->foreignId('product_variant_id')->constrained('product_variants')->onDelete('cascade');
-            $table->integer('quantity');
+            $table->foreignId('store_id')->constrained('stores')->cascadeOnDelete();
+            $table->foreignId('product_variant_id')->constrained('product_variants')->cascadeOnDelete();
+
+            // cantidad con decimales
+            $table->decimal('quantity', 12, 2)->default(0);
+
             $table->integer('stock_alert_threshold')->default(5);
             $table->timestamps();
 
-            // Clave única para evitar entradas duplicadas de un mismo producto en una misma tienda
             $table->unique(['store_id', 'product_variant_id']);
         });
     }

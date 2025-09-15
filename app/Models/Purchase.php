@@ -2,11 +2,15 @@
 
 namespace App\Models;
 
+use App\Policies\PurchasePolicy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
+use Illuminate\Database\Eloquent\Casts\Attribute; // 1. Importar Attribute
 
+#[UsePolicy(PurchasePolicy::class)]
 class Purchase extends Model
 {
     use HasFactory;

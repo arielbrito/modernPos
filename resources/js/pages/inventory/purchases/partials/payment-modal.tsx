@@ -1,4 +1,4 @@
-/* eslint-disable react-hooks/exhaustive-deps */
+
 import * as React from "react";
 import { useForm } from "@inertiajs/react";
 import { toast } from "sonner";
@@ -27,7 +27,7 @@ interface Props {
 export function PaymentModal({ purchaseId, maxAmount }: Props) {
     const [open, setOpen] = React.useState(false);
 
-    const { data, setData, post, processing, errors, reset } = useForm({
+    const { data, setData, post, processing, errors } = useForm({
         method: "cash" as PaymentMethod,
         paid_amount: maxAmount,
         paid_at: dayjs().format('YYYY-MM-DDTHH:mm'), // Formato correcto para datetime-local
@@ -38,15 +38,17 @@ export function PaymentModal({ purchaseId, maxAmount }: Props) {
     // Reseteamos el formulario cada vez que se abre el modal.
     React.useEffect(() => {
         if (open) {
-            reset();
-            // Pre-llenamos con el monto máximo y la fecha/hora actual
-            setData({
-                ...data,
+            setData(prev => ({
+                ...prev,
+                method: "cash",
                 paid_amount: maxAmount,
                 paid_at: dayjs().format('YYYY-MM-DDTHH:mm'),
-            });
+                reference: "",
+                notes: "",
+            }));
         }
-    }, [open, maxAmount]);
+    }, [open, maxAmount, setData]);
+
 
 
     const submit = (e: React.FormEvent) => {

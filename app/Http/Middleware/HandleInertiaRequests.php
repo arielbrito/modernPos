@@ -4,6 +4,8 @@ namespace App\Http\Middleware;
 
 use App\Models\Store;
 use App\Models\User;
+use App\Models\Register;
+use App\Models\CashShift;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Session;
@@ -71,8 +73,13 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn() => Session::get('success'),
                 'error' => fn() => Session::get('error'),
             ],
+            'pos' => [
+                'last_sale' => fn() => $request->session()->pull('pos.last_sale'), // pull = una sola vez
+            ],
 
             'active_store' => fn() => $this->buildActiveStore($request),
+
+            'context' => fn() => $this->buildInertiaContext($request),
         ];
     }
 
@@ -116,6 +123,34 @@ class HandleInertiaRequests extends Middleware
             'code'      => $s->code,
             'logo_url'  => $s->logo_url,   // accessor de tu modelo Store
             'is_active' => (bool) $s->is_active,
+        ];
+    }
+
+
+
+    private function buildInertiaContext(Request $request): array
+    {
+        $storeId = $request->session()->get('active_store_id');
+        $regId   = $request->session()->get('active_register_id');
+        $shiftId = $request->session()->get('active_shift_id');
+
+        $activeRegister = null;
+        if ($regId) {
+            $activeRegister = Register::query()
+                ->select('id', 'name', 'store_id')
+                ->find($regId);
+        }
+
+        // Si quieres mandar también info del turno (opcional):
+        $activeShift = $shiftId ? CashShift::query()
+            ->select('id', 'opened_at', 'closed_at', 'status', 'register_id', 'opened_by')
+            ->find($shiftId) : null;
+
+        return [
+            'active_store_id' => $storeId,
+            'active_register' => $activeRegister,
+            'active_shift_id' => $shiftId,
+            // 'active_shift'     => $activeShift, // opcional
         ];
     }
 }

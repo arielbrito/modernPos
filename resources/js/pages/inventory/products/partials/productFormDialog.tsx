@@ -1,23 +1,25 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useEffect, useMemo, useState } from 'react';
-import { router, useForm } from '@inertiajs/react';
+import React, { useEffect, useMemo, useCallback } from 'react';
+import { useForm } from '@inertiajs/react';
 import { Category, Product, Supplier } from '@/types';
 
+// Componentes UI de ShadCN
 import { Button } from '@/components/ui/button';
-import {
-    Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { Trash2, PlusCircle, Package, ReceiptText } from 'lucide-react';
 import InputError from '@/components/input-error';
-import ProductController from '@/actions/App/Http/Controllers/Inventory/ProductController';
-import { Trash2 } from 'lucide-react';
 
+// Wayfinder para rutas
+import ProductController from '@/actions/App/Http/Controllers/Inventory/ProductController';
+
+// --- TIPOS Y HELPERS ---
 
 interface ProductFormDialogProps {
     isOpen: boolean;
@@ -32,445 +34,189 @@ type VariantFormData = {
     sku: string;
     selling_price: string;
     cost_price: string;
-    attributes: string; // "Talla:M,Color:Rojo"
+    barcode: string;
+    attributes: string;
+    is_taxable: boolean;
+    tax_code: string;
+    tax_rate: number;
 };
 
 type ProductFormData = {
     name: string;
-    slug: string;
-    type: 'simple' | 'variable';
     description: string;
-    category_id: string | null;
-    supplier_id?: string | null;
-    barcode: string;
-    image: File | null;
+    product_nature: 'stockable' | 'service';
+    category_id: string;
+    supplier_id: string;
+    unit: string;
+    is_active: boolean;
     variants: VariantFormData[];
 };
 
-const attributesObjectToString = (attributes: Record<string, any> | null | undefined): string =>
-    !attributes || Object.keys(attributes).length === 0
-        ? ''
-        : Object.entries(attributes)
-            .map(([k, v]) => `${k}:${v}`)
-            .join(',');
+const attributesObjectToString = (attributes: Record<string, any> | null | undefined): string => {
+    if (!attributes || Object.keys(attributes).length === 0) return '';
+    return Object.entries(attributes).map(([k, v]) => `${k}:${v}`).join(', ');
+};
 
-// slug helper
-const slugify = (text: string) =>
-    text
-        .toString()
-        .toLowerCase()
-        .trim()
-        .replace(/\s+/g, '-')
-        .replace(/[^\w-]+/g, '')
-        .replace(/--+/g, '-');
+const newEmptyVariant = (): VariantFormData => ({
+    id: undefined,
+    sku: '',
+    selling_price: '',
+    cost_price: '',
+    barcode: '',
+    attributes: '',
+    is_taxable: true,
+    tax_code: 'ITBIS18',
+    tax_rate: 0.18,
+});
 
-export function ProductFormDialog({
-    isOpen,
-    setIsOpen,
-    categories,
-    suppliers,
-    productToEdit,
-}: ProductFormDialogProps) {
+// --- SUB-COMPONENTES DE FORMULARIO PARA REUTILIZACIÓN ---
+
+const Section = ({ title, children }: { title: string, children: React.ReactNode }) => (
+    <div className="space-y-2">
+        <h3 className="text-md font-semibold text-slate-800 dark:text-slate-200 border-b pb-2">{title}</h3>
+        <div className="pt-2 space-y-4">{children}</div>
+    </div>
+);
+
+// --- COMPONENTE PRINCIPAL ---
+
+export function ProductFormDialog({ isOpen, setIsOpen, categories, suppliers, productToEdit }: ProductFormDialogProps) {
     const isEditing = !!productToEdit;
 
-    const { data, setData, processing, errors, reset, clearErrors } = useForm<ProductFormData>({
+    const { data, setData, post, patch, errors, reset, processing, clearErrors } = useForm<ProductFormData>({
         name: '',
-        slug: '',
-        type: 'simple',
         description: '',
-        category_id: null,
-        supplier_id: null,
-        barcode: '',
-        image: null,
-        variants: [],
+        product_nature: 'stockable',
+        category_id: '',
+        supplier_id: '',
+        unit: 'Unidad',
+        is_active: true,
+        variants: [newEmptyVariant()],
     });
 
-    // preview imagen (nueva o actual)
-    const currentImageFromProduct = useMemo(() => {
-        const withImage = productToEdit?.variants?.find((v: any) => v?.image_url);
-        return withImage?.image_url ?? null;
-    }, [productToEdit]);
+    const isStockable = data.product_nature === 'stockable';
 
-    const imagePreviewUrl = useMemo(() => {
-        if (data.image) return URL.createObjectURL(data.image);
-        return currentImageFromProduct;
-    }, [data.image, currentImageFromProduct]);
-
-    // variant nueva (para productos "variable")
-    const [newVariant, setNewVariant] = useState<VariantFormData>({
-        sku: '',
-        selling_price: '',
-        cost_price: '',
-        attributes: '',
-    });
-
-    // generar slug automático
     useEffect(() => {
-        setData('slug', slugify(data.name));
-    }, [data.name]);
-
-    // al abrir el modal: precargar datos si es edición
-    useEffect(() => {
-        clearErrors();
-        if (isOpen && isEditing && productToEdit) {
+        if (isOpen && productToEdit) {
             setData({
                 name: productToEdit.name,
-                slug: productToEdit.slug,
-                type: productToEdit.type,
                 description: productToEdit.description || '',
-                category_id: productToEdit.category_id ? String(productToEdit.category_id) : null,
-                supplier_id: productToEdit.supplier_id ? String(productToEdit.supplier_id) : null,
-                barcode: productToEdit.variants?.[0]?.barcode || '',
-                image: null, // por seguridad
-                variants: productToEdit.variants.map((variant: any) => ({
-                    id: variant.id,
-                    sku: variant.sku ?? '',
-                    selling_price: String(variant.selling_price ?? ''),
-                    cost_price: String(variant.cost_price ?? ''),
-                    attributes: attributesObjectToString(variant.attributes),
+                product_nature: productToEdit.product_nature as 'stockable' | 'service',
+                category_id: String(productToEdit.category_id || ''),
+                supplier_id: String(productToEdit.supplier_id || ''),
+                unit: productToEdit.unit || 'Unidad',
+                is_active: productToEdit.is_active,
+                variants: productToEdit.variants.map((v: any) => ({
+                    id: v.id,
+                    sku: v.sku,
+                    selling_price: String(v.selling_price ?? ''),
+                    cost_price: String(v.cost_price ?? ''),
+                    barcode: v.barcode ?? '',
+                    attributes: attributesObjectToString(v.attributes),
+                    is_taxable: v.is_taxable,
+                    tax_code: v.tax_code || 'ITBIS18',
+                    tax_rate: v.tax_rate || 0.18,
                 })),
             });
-        } else if (isOpen && !isEditing) {
+        } else if (!isOpen) {
             reset();
-            // para producto simple, asegúrate de tener una variante vacía
-            setData('variants', [{ sku: '', selling_price: '', cost_price: '', attributes: '' }]);
         }
+        clearErrors();
     }, [isOpen, productToEdit]);
 
-    // si cambia el tipo, sincronicemos variantes
-    useEffect(() => {
-        if (data.type === 'simple') {
-            if (data.variants.length === 0) {
-                setData('variants', [{ sku: '', selling_price: '', cost_price: '', attributes: '' }]);
-            } else if (data.variants.length > 1) {
-                setData('variants', [data.variants[0]]);
-            }
+    const handleVariantChange = useCallback((index: number, field: keyof VariantFormData, value: any) => {
+        setData('variants', data.variants.map((variant, i) =>
+            i === index ? { ...variant, [field]: value } : variant
+        ));
+    }, [data.variants]);
+
+    const addVariant = () => setData('variants', [...data.variants, newEmptyVariant()]);
+
+    const removeVariant = (index: number) => {
+        if (data.variants.length > 1) {
+            setData('variants', data.variants.filter((_, i) => i !== index));
         }
-    }, [data.type]);
-
-    const closeDialog = () => {
-        setIsOpen(false);
-        reset();
-        clearErrors();
-        setNewVariant({ sku: '', selling_price: '', cost_price: '', attributes: '' });
-    };
-
-    const handleAddVariant = () => {
-        if (!newVariant.sku || !newVariant.selling_price) {
-            alert('El SKU y el Precio de Venta son obligatorios para cada variante.');
-            return;
-        }
-        setData('variants', [...data.variants, newVariant]);
-        setNewVariant({ sku: '', selling_price: '', cost_price: '', attributes: '' });
-    };
-
-    const handleRemoveVariant = (index: number) => {
-        setData('variants', data.variants.filter((_, i) => i !== index));
-    };
-
-    const handleVariantChange = (index: number, key: keyof VariantFormData, value: string) => {
-        const next = [...data.variants];
-        next[index] = { ...next[index], [key]: value };
-        setData('variants', next);
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        const options = { preserveScroll: true, onSuccess: () => setIsOpen(false) };
 
-        const payload: any = { ...data };
-        if (!payload.image_path) delete payload.image_path;
-        if (!isEditing) delete payload.id;
-        if (isEditing) payload._method = "put";
-
-        router.post(
-            isEditing ? ProductController.update.url({ product: productToEdit!.id! }) : ProductController.store.url(),
-            payload,
-            {
-                forceFormData: true,
-                preserveScroll: true,
-                onSuccess: closeDialog,
-
-            }
-        )
-
+        if (isEditing) {
+            patch(ProductController.update.url({ product: productToEdit!.id }), options);
+        } else {
+            post(ProductController.store.url(), options);
+        }
     };
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogContent className="sm:max-w-3xl">
+            <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col">
                 <DialogHeader>
-                    <DialogTitle>{isEditing ? 'Editar producto' : 'Nuevo producto'}</DialogTitle>
-                    <DialogDescription>
-                        Llena los campos para {isEditing ? 'actualizar' : 'crear'} el producto.
-                    </DialogDescription>
+                    <DialogTitle>{isEditing ? 'Editar Producto' : 'Crear Nuevo Producto'}</DialogTitle>
+                    <DialogDescription>Completa la información del {isStockable ? 'producto' : 'servicio'}.</DialogDescription>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit} className="space-y-5 py-2">
-                    {/* Datos principales */}
-                    <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
-                        <div>
-                            <Label>Nombre</Label>
-                            <Input value={data.name} onChange={(e) => setData('name', e.target.value)} />
-                            <InputError message={errors.name} />
-                            {data.slug && (
-                                <p className="mt-1 text-xs text-muted-foreground">slug: {data.slug}</p>
-                            )}
-                        </div>
-
-                        <div>
-                            <Label>Categoría</Label>
-                            <Select
-                                onValueChange={(value) => setData('category_id', value)}
-                                value={data.category_id ?? ''}
-                            >
-                                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                                <SelectContent>
-                                    {categories.map((cat) => (
-                                        <SelectItem key={cat.id} value={String(cat.id)}>{cat.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <InputError message={errors.category_id} />
-                        </div>
-
-                        <div>
-                            <Label>Proveedor (opcional)</Label>
-                            <Select
-                                onValueChange={(value) => setData('supplier_id', value)}
-                                value={data.supplier_id ?? ''}
-                            >
-                                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                                <SelectContent>
-
-                                    {suppliers.map((s) => (
-                                        <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div>
-                            <Label>Tipo</Label>
-                            <Select
-                                onValueChange={(value: 'simple' | 'variable') => setData('type', value)}
-                                value={data.type}
-                            >
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="simple">Simple</SelectItem>
-                                    <SelectItem value="variable">Con variantes</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <InputError message={errors.type} />
-                        </div>
-
-                        <div className="md:col-span-2">
-                            <Label>Descripción (opcional)</Label>
-                            <Textarea
-                                rows={3}
-                                value={data.description}
-                                onChange={(e) => setData('description', e.target.value)}
-                            />
-                            <InputError message={errors.description} />
-                        </div>
-
-                        <div>
-                            <Label>Código de barras (opcional)</Label>
-                            <Input value={data.barcode} onChange={(e) => setData('barcode', e.target.value)} />
-                            <InputError message={errors.barcode} />
-                        </div>
-
-                        <div>
-                            <Label>Imagen</Label>
-                            <Input
-                                type="file"
-                                className="pt-1.5"
-                                accept="image/*"
-                                onChange={(e) => setData('image', e.target.files ? e.target.files[0] : null)}
-                            />
-                            <InputError message={errors.image} />
-                            {imagePreviewUrl && (
-                                <div className="mt-2">
-                                    <img
-                                        src={imagePreviewUrl}
-                                        alt="Vista previa"
-                                        className="h-20 w-20 rounded-md object-cover ring-1 ring-border"
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <hr />
-
-                    {/* Variantes */}
-                    {data.type === 'simple' ? (
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                            <div>
-                                <Label>SKU</Label>
-                                <Input
-                                    value={data.variants[0]?.sku ?? ''}
-                                    onChange={(e) =>
-                                        setData('variants', [{
-                                            ...(data.variants[0] ?? { cost_price: '', selling_price: '', attributes: '' }),
-                                            sku: e.target.value,
-                                        }])
-                                    }
-                                />
-                                <InputError message={errors['variants.0.sku']} />
-                            </div>
-
-                            <div>
-                                <Label>Precio costo</Label>
-                                <Input
-                                    type="number"
-                                    inputMode="decimal"
-                                    value={data.variants[0]?.cost_price ?? ''}
-                                    onChange={(e) =>
-                                        setData('variants', [{
-                                            ...(data.variants[0] ?? { sku: '', selling_price: '', attributes: '' }),
-                                            cost_price: e.target.value,
-                                        }])
-                                    }
-                                />
-                                <InputError message={errors['variants.0.cost_price']} />
-                            </div>
-
-                            <div>
-                                <Label>Precio venta</Label>
-                                <Input
-                                    type="number"
-                                    inputMode="decimal"
-                                    value={data.variants[0]?.selling_price ?? ''}
-                                    onChange={(e) =>
-                                        setData('variants', [{
-                                            ...(data.variants[0] ?? { sku: '', cost_price: '', attributes: '' }),
-                                            selling_price: e.target.value,
-                                        }])
-                                    }
-                                />
-                                <InputError message={errors['variants.0.selling_price']} />
-                            </div>
-                        </div>
-                    ) : (
-                        <div>
-                            <h3 className="mb-2 text-lg font-medium">Variantes</h3>
-
-                            {/* Lista editable */}
-                            <div className="mb-4 space-y-3 rounded-md border p-4">
-                                {data.variants.map((variant, index) => (
-                                    <div key={index} className="grid grid-cols-1 gap-3 md:grid-cols-5">
-                                        <div>
-                                            <Label>SKU</Label>
-                                            <Input
-                                                value={variant.sku}
-                                                onChange={(e) => handleVariantChange(index, 'sku', e.target.value)}
-                                            />
-                                            <InputError message={errors[`variants.${index}.sku` as any]} />
-                                        </div>
-                                        <div>
-                                            <Label>Precio venta</Label>
-                                            <Input
-                                                type="number"
-                                                inputMode="decimal"
-                                                value={variant.selling_price}
-                                                onChange={(e) =>
-                                                    handleVariantChange(index, 'selling_price', e.target.value)
-                                                }
-                                            />
-                                            <InputError message={errors[`variants.${index}.selling_price` as any]} />
-                                        </div>
-                                        <div>
-                                            <Label>Precio costo</Label>
-                                            <Input
-                                                type="number"
-                                                inputMode="decimal"
-                                                value={variant.cost_price}
-                                                onChange={(e) =>
-                                                    handleVariantChange(index, 'cost_price', e.target.value)
-                                                }
-                                            />
-                                            <InputError message={errors[`variants.${index}.cost_price` as any]} />
-                                        </div>
-                                        <div>
-                                            <Label>Atributos</Label>
-                                            <Input
-                                                placeholder="Talla:M,Color:Rojo"
-                                                value={variant.attributes}
-                                                onChange={(e) =>
-                                                    handleVariantChange(index, 'attributes', e.target.value)
-                                                }
-                                            />
-                                            <InputError message={errors[`variants.${index}.attributes` as any]} />
-                                        </div>
-                                        <div className="flex items-end justify-end">
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => handleRemoveVariant(index)}
-                                                aria-label="Eliminar variante"
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </div>
-                                ))}
-
-                                {data.variants.length === 0 && (
-                                    <p className="text-center text-sm text-muted-foreground">
-                                        Aún no has añadido ninguna variante.
-                                    </p>
-                                )}
-                            </div>
-
-                            {/* Nueva variante */}
-                            <div className="grid grid-cols-1 gap-3 rounded-md border border-dashed p-4 md:grid-cols-5">
-                                <div>
-                                    <Label>SKU</Label>
-                                    <Input
-                                        value={newVariant.sku}
-                                        onChange={(e) => setNewVariant({ ...newVariant, sku: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Precio venta</Label>
-                                    <Input
-                                        type="number"
-                                        inputMode="decimal"
-                                        value={newVariant.selling_price}
-                                        onChange={(e) => setNewVariant({ ...newVariant, selling_price: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Precio costo</Label>
-                                    <Input
-                                        type="number"
-                                        inputMode="decimal"
-                                        value={newVariant.cost_price}
-                                        onChange={(e) => setNewVariant({ ...newVariant, cost_price: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <Label>Atributos</Label>
-                                    <Input
-                                        placeholder="Talla:M,Color:Rojo"
-                                        value={newVariant.attributes}
-                                        onChange={(e) => setNewVariant({ ...newVariant, attributes: e.target.value })}
-                                    />
-                                </div>
-                                <div className="flex items-end">
-                                    <Button type="button" className="w-full" onClick={handleAddVariant}>
-                                        Añadir
+                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto space-y-6 p-1 pr-6">
+                    <Section title="Información General">
+                        <div className="grid md:grid-cols-2 gap-4">
+                            <div className="md:col-span-2">
+                                <Label className="font-semibold">Naturaleza</Label>
+                                <div className="grid grid-cols-2 gap-2 mt-1">
+                                    <Button type="button" variant={isStockable ? 'secondary' : 'outline'} onClick={() => setData('product_nature', 'stockable')}>
+                                        <Package className="w-4 h-4 mr-2" /> Producto Inventariable
+                                    </Button>
+                                    <Button type="button" variant={!isStockable ? 'secondary' : 'outline'} onClick={() => setData('product_nature', 'service')}>
+                                        <ReceiptText className="w-4 h-4 mr-2" /> Servicio
                                     </Button>
                                 </div>
                             </div>
+                            <div><Label htmlFor="name">Nombre <span className="text-red-500">*</span></Label><Input id="name" value={data.name} onChange={e => setData('name', e.target.value)} /><InputError message={errors.name} /></div>
+                            <div><Label htmlFor="category_id">Categoría</Label><Select value={data.category_id} onValueChange={v => setData('category_id', v)}><SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger><SelectContent>{categories.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent></Select><InputError message={errors.category_id} /></div>
+                            {isStockable && (
+                                <div><Label htmlFor="supplier_id">Proveedor <span className="text-red-500">*</span></Label><Select value={data.supplier_id} onValueChange={v => setData('supplier_id', v)}><SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger><SelectContent>{suppliers.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}</SelectContent></Select><InputError message={errors.supplier_id} /></div>
+                            )}
+                            <div><Label htmlFor="unit">Unidad de Medida</Label><Select value={data.unit} onValueChange={v => setData('unit', v)}><SelectTrigger><SelectValue placeholder="Unidad" /></SelectTrigger><SelectContent>{['Unidad', 'Kg', 'g', 'L', 'm', 'cm', 'Caja', 'Paquete', 'Botella'].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent></Select><InputError message={errors.unit} /></div>
                         </div>
-                    )}
+                        <div><Label htmlFor="description">Descripción (Opcional)</Label><Textarea id="description" value={data.description} onChange={e => setData('description', e.target.value)} /><InputError message={errors.description} /></div>
+                    </Section>
 
-                    <div className="flex justify-end pt-2">
+                    <Section title={isStockable ? 'Variantes y Precios' : 'Precio del Servicio'}>
+                        {data.variants.map((variant, index) => (
+                            <div key={index} className="space-y-4 p-4 border rounded-md relative bg-slate-50 dark:bg-slate-800/50">
+                                {isStockable && data.variants.length > 1 && (
+                                    <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7" onClick={() => removeVariant(index)}>
+                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                    </Button>
+                                )}
+                                <div className="grid md:grid-cols-2 gap-4">
+                                    {isStockable && (
+                                        <div><Label htmlFor={`sku_${index}`}>SKU <span className="text-red-500">*</span></Label><Input id={`sku_${index}`} value={variant.sku} onChange={e => handleVariantChange(index, 'sku', e.target.value)} /><InputError message={errors[`variants.${index}.sku`]} /></div>
+                                    )}
+                                    <div><Label htmlFor={`price_${index}`}>Precio de Venta <span className="text-red-500">*</span></Label><Input id={`price_${index}`} type="number" value={variant.selling_price} onChange={e => handleVariantChange(index, 'selling_price', e.target.value)} /><InputError message={errors[`variants.${index}.selling_price`]} /></div>
+                                </div>
+                                {isStockable && (
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        <div><Label htmlFor={`cost_${index}`}>Precio de Costo</Label><Input id={`cost_${index}`} type="number" value={variant.cost_price} onChange={e => handleVariantChange(index, 'cost_price', e.target.value)} /><InputError message={errors[`variants.${index}.cost_price`]} /></div>
+                                        <div><Label htmlFor={`barcode_${index}`}>Código de Barras</Label><Input id={`barcode_${index}`} value={variant.barcode} onChange={e => handleVariantChange(index, 'barcode', e.target.value)} /><InputError message={errors[`variants.${index}.barcode`]} /></div>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                        {isStockable && (
+                            <Button type="button" variant="outline" size="sm" onClick={addVariant} className="mt-2">
+                                <PlusCircle className="w-4 h-4 mr-2" /> Añadir Variante
+                            </Button>
+                        )}
+                    </Section>
+
+                    <div className="flex justify-between items-center pt-4 border-t">
+                        <div className="flex items-center space-x-2">
+                            <Switch id="is_active" checked={data.is_active} onCheckedChange={c => setData('is_active', c)} />
+                            <Label htmlFor="is_active">Producto Activo en el Catálogo</Label>
+                        </div>
                         <Button type="submit" disabled={processing}>
-                            {processing ? 'Guardando…' : isEditing ? 'Actualizar' : 'Crear'}
+                            {processing ? 'Guardando…' : isEditing ? 'Actualizar Producto' : 'Crear Producto'}
                         </Button>
                     </div>
                 </form>

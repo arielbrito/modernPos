@@ -17,7 +17,7 @@ class CategoryController extends Controller
     public function index()
     {
         // 1. Datos paginados para la tabla principal
-        $paginatedCategories = Category::with('parent')->latest()->paginate(15);
+        $paginatedCategories = Category::with('parent')->latest()->paginate(10);
 
         // 2. Lista completa para el selector de "categoría padre"
         $allCategories = Category::all(['id', 'name']);

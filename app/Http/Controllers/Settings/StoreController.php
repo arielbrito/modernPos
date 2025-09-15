@@ -100,7 +100,7 @@ class StoreController extends Controller
     {
         $this->authorize('view', $store);
         return Inertia::render('settings/stores/show', [
-            'store' => $store->only(['id', 'name', 'code', 'currency', 'is_active']),
+            'store' => $store->only(['id', 'code', 'rnc', 'name', 'phone', 'address', 'email', 'currency', 'logo_url', 'is_active']),
         ]);
     }
 

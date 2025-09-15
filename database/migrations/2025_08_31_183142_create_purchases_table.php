@@ -35,6 +35,9 @@ return new class extends Migration
             $table->foreignId('approved_by')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('received_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
+
+            $table->index('code');
+            $table->index(['status', 'supplier_id']);
         });
     }
 

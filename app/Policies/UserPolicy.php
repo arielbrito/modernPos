@@ -54,4 +54,9 @@ class UserPolicy
     {
         return $authUser->hasRole('Super-Admin');
     }
+
+    public function peek(User $user): bool
+    {
+        return $user->hasPermissionTo('ncf.peek'); // o tu regla real, p.ej. 
+    }
 }

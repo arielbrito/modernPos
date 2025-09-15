@@ -9,6 +9,7 @@ import { usePage } from '@inertiajs/react';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import StoreSwitcher from '@/components/store-switcher'; // 👈 importa el switcher
+import HeaderRight from '@/components/header-right';
 
 export default function AppSidebarLayout({ children, breadcrumbs = [] }: PropsWithChildren<{ breadcrumbs?: BreadcrumbItem[] }>) {
     const { props, url } = usePage();
@@ -35,7 +36,11 @@ export default function AppSidebarLayout({ children, breadcrumbs = [] }: PropsWi
         <AppShell variant="sidebar">
             <AppSidebar />
             <AppContent variant="sidebar" className="overflow-x-hidden">
-                <AppSidebarHeader breadcrumbs={breadcrumbs} right={showSwitcher ? <StoreSwitcher /> : null} />
+                <AppSidebarHeader breadcrumbs={breadcrumbs} right={
+                    <HeaderRight>
+                        {showSwitcher ? <StoreSwitcher /> : null}
+                    </HeaderRight>
+                } />
                 {children}
             </AppContent>
             <Toaster position="top-right" richColors />

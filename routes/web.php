@@ -1,7 +1,14 @@
 <?php
 
 use App\Http\Controllers\Auth\StoreSessionController;
+use App\Http\Controllers\CRM\CustomerController;
+use App\Http\Controllers\CRM\DgiiLookupController;
+use App\Http\Controllers\Fiscal\NcfApiController;
+use App\Http\Controllers\Fiscal\NcfSequenceController;
+use App\Http\Controllers\Notifications\NotificationController;
 use App\Http\Controllers\POS\PosController;
+
+
 use App\Http\Middleware\EnsureStoreIsSelected;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -41,8 +48,49 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/pos/search-products', [PosController::class, 'searchProducts'])->name('pos.searchProducts');
         Route::post('/pos/sales', [PosController::class, 'storeSale'])->name('pos.storeSale');
 
+        //Rutas de Customers
+
+        Route::get('crm/customers/quick-search', [CustomerController::class, 'quickSearch'])
+            ->name('crm.customers.quick_search');
+        Route::get('/dgii/find', [DgiiLookupController::class, 'find'])->name('dgii.find')->middleware('throttle:30,1');
+        Route::resource('crm/customers', CustomerController::class);
+        Route::get('crm/customers-export', [CustomerController::class, 'export'])
+            ->name('crm.customers.export');
+
+
+
+        //Rutas para el manejo de NCF
+        Route::get('/fiscal/ncf-sequences', [NcfSequenceController::class, 'index'])->name('fiscal.ncf.index');
+        Route::post('/fiscal/ncf-sequences', [NcfSequenceController::class, 'store'])->name('fiscal.ncf.store');
+        Route::put('/fiscal/ncf-sequences/{sequence}', [NcfSequenceController::class, 'update'])->name('fiscal.ncf.update');
+        Route::delete('/fiscal/ncf-sequences/{sequence}', [NcfSequenceController::class, 'destroy'])->name('fiscal.ncf.destroy');
+
+        // API operativa
+        Route::get('/api/ncf/preview', [NcfApiController::class, 'preview'])->name('api.ncf.preview');
+        Route::get('/api/ncf/default-type', [NcfApiController::class, 'defaultType'])->name('api.ncf.default');
+        Route::post('/api/ncf/consume', [NcfApiController::class, 'consume'])->name('api.ncf.consume');
+
+        //Notificaciones
+        Route::get('/api/notifications', [NotificationController::class, 'dropdown'])->name('api.notifications.dropdown');
+        Route::post('/api/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('api.notifications.read_all');
+        Route::post('/api/notifications/{id}/read', [NotificationController::class, 'markRead'])->name('api.notifications.read');
+        Route::delete('/api/notifications/{id}', [NotificationController::class, 'destroy'])->name('api.notifications.delete');
+
+        // Página completa
+        Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+
+
+
+
+
+
+
+
+
         // Aquí también irían los "require" de tus otros archivos de rutas
         // que deben estar protegidos por este middleware.
+        require __DIR__ . '/cash.php';
+        require __DIR__ . '/sale.php';
         require __DIR__ . '/inventory.php';
         require __DIR__ . '/settings.php';
     });

@@ -17,6 +17,9 @@ return new class extends Migration
             $table->string('name');
             $table->string('slug')->unique();
             $table->text('description')->nullable();
+            $table->enum('product_nature', ['stockable', 'service'])
+                ->default('stockable')
+                ->comment('Define si el producto es inventariable (stockable) o un servicio.');
             $table->foreignId('category_id')->nullable()->constrained('categories')->onDelete('set null');
             $table->foreignId('supplier_id')->nullable()->constrained('suppliers')->onDelete('set null');
             $table->enum('type', ['simple', 'variable'])->default('simple');

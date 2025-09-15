@@ -21,7 +21,7 @@ class PurchaseItem extends Model
         'line_total'
     ];
 
-    public $timestamps = false; // Los items suelen heredar la fecha del padre
+
     public function purchase(): BelongsTo
     {
         return $this->belongsTo(Purchase::class);

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from "@/components/ui/table";
 import { toast } from "sonner";
 import { router } from "@inertiajs/react";
-import { Loader2, AlertCircle, Check, PackagePlus } from "lucide-react";
+import { AlertCircle, Check, PackagePlus } from "lucide-react";
 import PurchaseController from "@/actions/App/Http/Controllers/Inventory/PurchaseController";
 
 // Tipos para mayor claridad
@@ -88,6 +88,8 @@ export function ReceiveModal({ purchaseId, items }: { purchaseId: number; items:
         });
     };
 
+    const nothingToReceive = items.every(it => Number(qtys[it.id] ?? 0) <= 0);
+
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -150,13 +152,8 @@ export function ReceiveModal({ purchaseId, items }: { purchaseId: number; items:
                         <PackagePlus className="h-4 w-4" />
                         Recibir Todo lo Pendiente
                     </Button>
-                    <Button onClick={submit} disabled={processing}>
-                        {processing ? (
-                            <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Procesando...
-                            </>
-                        ) : "Confirmar Recepción"}
+                    <Button onClick={submit} disabled={processing || nothingToReceive}>
+                        {processing ? (<>...</>) : "Confirmar Recepción"}
                     </Button>
                 </DialogFooter>
             </DialogContent>

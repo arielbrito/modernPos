@@ -12,14 +12,19 @@ use App\Models\PurchaseItem;
 use App\Models\PurchasePayment;
 use App\Models\Supplier;
 use App\Services\PurchaseReceivingService;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\UploadedFile;
 
 class PurchaseController extends Controller
 {
+    use AuthorizesRequests;
     public function __construct(private PurchaseReceivingService $receivingService) {}
     /**
      * Display a listing of the resource.
@@ -83,22 +88,26 @@ class PurchaseController extends Controller
         }
 
         return DB::transaction(function () use ($data, $userId, $storeId) {
-            $code = $this->nextCode();
+
 
 
             $purchase = Purchase::create([
-                'supplier_id' => $data['supplier_id'],
-                'code' => $code,
-                'status' => 'draft',
+                'supplier_id'   => $data['supplier_id'],
+                'store_id'      => $storeId, // o $data['store_id']
+                'code'          => 'PENDING', // temporal
+                'status'        => 'draft',
                 'invoice_number' => $data['invoice_number'] ?? null,
-                'invoice_date' => $data['invoice_date'] ?? null,
-                'currency' => $data['currency'],
+                'invoice_date'  => $data['invoice_date'] ?? null,
+                'currency'      => $data['currency'],
                 'exchange_rate' => $data['exchange_rate'],
-                'freight' => $data['freight'] ?? 0,
-                'other_costs' => $data['other_costs'] ?? 0,
-                'notes' => $data['notes'] ?? null,
-                'created_by' => $userId,
-                'store_id' => $storeId,
+                'freight'       => $data['freight'] ?? 0,
+                'other_costs'   => $data['other_costs'] ?? 0,
+                'notes'         => $data['notes'] ?? null,
+                'created_by'    => $userId,
+            ]);
+
+            $purchase->update([
+                'code' => 'OC-' . now()->format('Ymd') . '-' . str_pad((string)$purchase->id, 5, '0', STR_PAD_LEFT)
             ]);
 
             $subtotal = 0;
@@ -166,6 +175,7 @@ class PurchaseController extends Controller
 
     public function approve(Purchase $purchase)
     {
+        $this->authorize('approve', $purchase);
         if ($purchase->status !== 'draft') {
             throw ValidationException::withMessages(['status' => 'Solo se puede aprobar un borrador.']);
         }
@@ -175,6 +185,7 @@ class PurchaseController extends Controller
 
     public function receive(Purchase $purchase, ReceivePurchaseRequest $request)
     {
+        $this->authorize('receive', $purchase);
         $items = $request->validated('items');
         $this->receivingService->receive($purchase, $items, Auth::id());
         return back()->with('success', 'Recepción registrada.');
@@ -182,6 +193,7 @@ class PurchaseController extends Controller
 
     public function storePayment(Purchase $purchase, StorePurchasePaymentRequest $request)
     {
+        $this->authorize('pay', $purchase);
         if (!in_array($purchase->status, ['received', 'partially_received'])) {
             throw ValidationException::withMessages([
                 'status' => 'No se pueden registrar pagos en una compra que aún no ha sido recibida.'
@@ -213,6 +225,7 @@ class PurchaseController extends Controller
 
     public function cancel(Purchase $purchase)
     {
+        $this->authorize('cancel', $purchase);
         if (in_array($purchase->status, ['received', 'partially_received'])) {
             throw ValidationException::withMessages(['status' => 'No se puede cancelar una compra con recepciones.']);
         }
@@ -231,11 +244,11 @@ class PurchaseController extends Controller
     }
 
 
-    private function nextCode(): string
-    {
-        $seq = (int) (Purchase::max('id') ?? 0) + 1;
-        return 'OC-' . now()->format('Ymd') . '-' . str_pad((string)$seq, 5, '0', STR_PAD_LEFT);
-    }
+    // private function nextCode(): string
+    // {
+    //     $seq = (int) (Purchase::max('id') ?? 0) + 1;
+    //     return 'OC-' . now()->format('Ymd') . '-' . str_pad((string)$seq, 5, '0', STR_PAD_LEFT);
+    // }
 
     public function searchProducts(Request $request)
     {
@@ -252,5 +265,71 @@ class PurchaseController extends Controller
             ->get();
 
         return response()->json($products);
+    }
+
+    public function uploadAttachment(Purchase $purchase, Request $request)
+    {
+        $request->validate([
+            'files'   => ['required', 'array', 'min:1'],
+            'files.*' => ['file', 'max:5120', 'mimes:pdf,jpg,jpeg,png,webp,heic,heif,xlsx,xls,csv,xml,doc,docx,txt'],
+        ]);
+
+        $disk = 'public';
+        $base = "purchases/{$purchase->id}";
+
+        $attachments = $purchase->attachments ?? [];
+
+        /** @var UploadedFile $file */
+        foreach ($request->file('files', []) as $file) {
+            $path = $file->store($base, $disk);
+
+            $attachments[] = [
+                'id'   => (string) Str::uuid(),
+                'name' => $file->getClientOriginalName(),
+                'path' => $path,
+                'size' => $file->getSize(),
+                'mime' => $file->getClientMimeType(),
+                'disk' => $disk,
+            ];
+        }
+
+        $purchase->update(['attachments' => $attachments]);
+
+        return back()->with('success', 'Archivo(s) subido(s) correctamente.');
+    }
+
+    public function destroyAttachment(Purchase $purchase, string $attachment)
+    {
+        $at = collect($purchase->attachments ?? [])->firstWhere('id', $attachment);
+
+        if (!$at) {
+            return back()->with('error', 'Adjunto no encontrado.');
+        }
+
+        // borra el archivo físico (si existe)
+        if (!empty($at['disk']) && !empty($at['path'])) {
+            Storage::disk($at['disk'])->delete($at['path']);
+        }
+
+        $remain = collect($purchase->attachments ?? [])->reject(fn($a) => $a['id'] === $attachment)->values()->all();
+        $purchase->update(['attachments' => $remain]);
+
+        return back()->with('success', 'Adjunto eliminado.');
+    }
+
+    public function downloadAttachment(Purchase $purchase, string $attachment)
+    {
+        $at = collect($purchase->attachments ?? [])->firstWhere('id', $attachment);
+        if (!$at) {
+            abort(404);
+        }
+
+        $disk = $at['disk'] ?? 'public';
+        $path = $at['path'] ?? null;
+        if (!$path || !Storage::disk($disk)->exists($path)) {
+            abort(404);
+        }
+
+        return Storage::disk($disk)->download($path, $at['name'] ?? basename($path));
     }
 }

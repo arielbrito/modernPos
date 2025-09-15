@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { InertiaLinkProps } from '@inertiajs/react';
 import { LucideIcon } from 'lucide-react';
-import { JSX } from 'react/jsx-runtime';
 
 export interface Auth {
     user: User;
@@ -23,6 +22,10 @@ export interface NavItem {
     icon?: LucideIcon | null;
     isActive?: boolean;
     children?: NavItem[];
+    badge?: {
+        text: string | number;
+        variant?: 'default' | 'secondary' | 'destructive' | 'outline';
+    };
 }
 
 export interface SharedData {
@@ -67,64 +70,77 @@ export interface Category {
 
 // Define la estructura de una Variante de Producto
 export interface ProductVariant {
-    [x: string]: any;
-    image_url: string;
+    stock: number;
     id: number;
+    product_id: number; // Es bueno tenerla para referencias
     sku: string;
     barcode?: string | null;
-    attributes?: Record<string, any> | null; // Para el JSON de atributos
-    cost_price: string; // Laravel lo envía como string
-    selling_price: string; // Laravel lo envía como string
+    attributes?: Record<string, any> | null;
+
+    // Cambiado a 'number' para cálculos más seguros en el frontend
+    cost_price: number;
+    selling_price: number;
+
+    // Campos de impuestos añadidos
+    is_taxable: boolean;
+    tax_code: string | null;
+    tax_rate: number | null;
+
+    // Campos de imagen
     image_path: string | null;
+    image_url: string | null; // El accesor puede devolver null si no hay imagen
 }
 
 // Define la estructura del Producto principal
 // Define la estructura del Producto principal
 export interface Product {
-    created_at: any;
-    updated_at: any;
     id: number;
     name: string;
     slug: string;
     description: string | null;
 
-    // IDs deben ser numéricos
+    // Se mantiene, está correcto
+    product_nature: 'stockable' | 'service';
+
     category_id: number | null;
     supplier_id: number | null;
-
     type: 'simple' | 'variable';
+    unit: string;
     is_active: boolean;
 
-    // Relaciones eager-loaded (opcionales)
+    // Cambiado de 'any' a 'string' para mayor seguridad de tipos
+    created_at: string;
+    updated_at: string;
+
+    // Relaciones (se mantienen)
     category?: Category | null;
     supplier?: Supplier | null;
-
-    // El producto tiene variantes, esto está correcto
     variants: ProductVariant[];
 }
 
-export type PaginatedResponse<T> = {
-    index: any;
-    data: T[];
-    links: {
-        length: number;
-        map(arg0: (link: any, idx: any) => JSX.Element): import('react').ReactNode;
-        first: string;
-        last: string;
-        prev: string | null;
-        next: string | null;
-    };
-    meta: {
-        current_page: number;
-        from: number;
-        last_page: number;
-        path: string;
-        per_page: number;
-        to: number;
-        total: number;
-    };
-};
+export interface PaginationLink {
+    url: string | null;
+    label: string;
+    active: boolean;
+}
 
+export interface PaginatedResponse<T> {
+    data: T[];
+    links: PaginationLink[]; // <-- LA CORRECCIÓN CLAVE: debe ser un array de PaginationLink
+
+    // El resto de las propiedades que Laravel envía para la paginación
+    current_page: number;
+    first_page_url: string;
+    from: number;
+    last_page: number;
+    last_page_url: string;
+    next_page_url: string | null;
+    path: string;
+    per_page: number;
+    prev_page_url: string | null;
+    to: number;
+    total: number;
+}
 export interface Supplier {
     id: number;
     name: string;
@@ -137,6 +153,8 @@ export interface Supplier {
 }
 
 export interface Store {
+    created_at: string | undefined;
+    updated_at: string;
     id: number;
     name: string;
     code?: string | null;
@@ -151,9 +169,16 @@ export interface Store {
 }
 
 export interface CartItem {
+    length?: number;
     product_variant_id: number;
     name: string;
     sku: string;
     quantity: number;
     price: number;
+}
+
+export interface PaginationLink {
+    url: string | null;
+    label: string;
+    active: boolean;
 }

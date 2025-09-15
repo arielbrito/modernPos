@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('currencies', function (Blueprint $table) {
             $table->id();
-            $table->string('code', 3);
+            $table->string('code', 3)->primary();
             $table->string('name');
             $table->string('symbol', 8)->nullable();
             $table->tinyInteger('minor_unit')->default(2);

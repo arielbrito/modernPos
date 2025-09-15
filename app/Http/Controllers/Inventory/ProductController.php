@@ -7,47 +7,173 @@ use App\Http\Requests\Inventory\StoreProductRequest;
 use App\Http\Requests\Inventory\UpdateProductRequest;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\Inventory;
 use App\Models\ProductStockMovement;
 use App\Models\ProductVariant;
+use App\Models\PurchaseItem;
 use App\Models\Store;
 use App\Models\Supplier;
 use Illuminate\Http\Request;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage; // Importar
 use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Arr;
+use App\Services\ProductService;
 
 class ProductController extends Controller
 {
+    public function __construct(protected ProductService $productService) {}
+
+
     public function index(Request $request)
     {
-        $query = Product::query()
-            ->with(['category:id,name', 'supplier:id,name', 'variants']);
+        $currentStoreId = (int) session('active_store_id');
+        $currentStoreId = $currentStoreId ? (int) $currentStoreId : null;
 
-        if ($s = $request->string('search')->toString()) {
+        $storeId = $request->filled('store_id')
+            ? (int) $request->input('store_id')
+            : $currentStoreId;
+
+        $s            = trim((string) $request->input('search', ''));
+        $categoryId   = $request->input('category_id');
+        $supplierId   = $request->input('supplier_id');
+        $minPrice     = $request->filled('min_price') ? (float) $request->input('min_price') : null;
+        $maxPrice     = $request->filled('max_price') ? (float) $request->input('max_price') : null;
+        $onlyLowStock = filter_var($request->input('only_low_stock', false), FILTER_VALIDATE_BOOLEAN);
+        $onlyActive   = filter_var($request->input('only_active', true), FILTER_VALIDATE_BOOLEAN);
+        // $storeId      = $request->input('store_id'); // opcional
+        $threshold    = (int) $request->input('low_stock_threshold', 10);
+
+        $sortField    = in_array($request->input('sort_field'), ['name', 'price', 'created_at', 'updated_at'], true)
+            ? $request->input('sort_field') : 'name';
+        $sortDir      = $request->input('sort_direction') === 'desc' ? 'desc' : 'asc';
+
+        $query = Product::query()
+            ->when($request->boolean('only_active', true), fn($q) => $q->active())
+            ->with([
+                'category:id,name',
+                'supplier:id,name',
+                // Variantes con stock por variante
+                'variants' => function ($q) use ($storeId) {
+                    $q->where('is_active', true)
+                        ->withSum([
+                            'inventory as stock' => function ($iq) use ($storeId) {
+                                if ($storeId) {
+                                    $iq->where('store_id', $storeId);
+                                }
+                            }
+                        ], 'quantity')
+                        ->select(['id', 'product_id', 'sku', 'selling_price', 'image_path', 'attributes', 'is_active']);
+                },
+            ])
+            // === Total por producto (NO colisiona con variant.stock) ===
+            ->select('products.*')
+            ->selectSub(function ($sub) use ($storeId) {
+                $sub->from('product_variants as pv')
+                    ->leftJoin('inventory as i', 'i.product_variant_id', '=', 'pv.id')
+                    ->whereColumn('pv.product_id', 'products.id')
+                    ->when($storeId, fn($qq) => $qq->where('i.store_id', $storeId))
+                    ->selectRaw('COALESCE(SUM(i.quantity),0)');
+            }, 'total_stock');
+
+        if ($s !== '') {
             $query->where(function ($q) use ($s) {
                 $q->where('name', 'like', "%{$s}%")
                     ->orWhereHas('variants', fn($v) => $v->where('sku', 'like', "%{$s}%"));
             });
         }
 
-        if ($cat = $request->integer('category_id')) {
-            $query->where('category_id', $cat);
+        if ($categoryId && $categoryId !== 'all') {
+            $query->where('category_id', $categoryId);
+        }
+        if ($supplierId && $supplierId !== 'all') {
+            $query->where('supplier_id', $supplierId);
         }
 
-        if ($sup = $request->integer('supplier_id')) {
-            $query->where('supplier_id', $sup);
+        if ($minPrice !== null || $maxPrice !== null) {
+            $query->whereHas('variants', function ($v) use ($minPrice, $maxPrice) {
+                if ($minPrice !== null) $v->where('selling_price', '>=', $minPrice);
+                if ($maxPrice !== null) $v->where('selling_price', '<=', $maxPrice);
+            });
         }
 
-        $products = $query->latest()->paginate(10)->withQueryString();
+        if ($onlyLowStock) {
+            $query->whereHas('variants', function ($v) use ($threshold, $storeId) {
+                $sql = 'COALESCE((SELECT SUM(i.quantity) FROM inventory i WHERE i.product_variant_id = product_variants.id'
+                    . ($storeId ? ' AND i.store_id = ?' : '')
+                    . '), 0) < ?';
+                $bindings = $storeId ? [$storeId, $threshold] : [$threshold];
+                $v->whereRaw($sql, $bindings);
+            });
+        }
+
+        if ($sortField === 'price') {
+            $query->withMin('variants as min_price', 'selling_price')
+                ->orderBy('min_price', $sortDir);
+        } else {
+            $query->orderBy($sortField, $sortDir);
+        }
+
+
+        $baseAgg = DB::table('inventory as i')
+            ->join('product_variants as pv', 'pv.id', '=', 'i.product_variant_id')
+            ->join('products as p', 'p.id', '=', 'pv.product_id')
+            ->when($storeId, fn($q) => $q->where('i.store_id', $storeId));
+        // Si quieres contar solo activos:
+        $baseAggActivos = (clone $baseAgg)->where('p.is_active', true)->where('pv.is_active', true);
+
+        // 👉 Total de **productos** (artículos) en la tienda actual
+        $productsCountStore = (clone $baseAgg)->distinct()->count('p.id');
+
+        // 👉 (Opcional) Total de **productos activos** en la tienda actual
+        $activeProductsCountStore = (clone $baseAggActivos)->distinct()->count('p.id');
+
+        // 👉 (Opcional) Total de **variantes (SKUs)** en la tienda actual
+        $variantsCountStore = (clone $baseAgg)->distinct()->count('pv.id');
+
+        $products = $query->paginate(10)->withQueryString();
+
+        $catalogProductsCount        = Product::count();
+        $catalogActiveProductsCount  = Product::where('is_active', true)->count();
+        $catalogVariantsCount        = ProductVariant::count();
+        $catalogActiveVariantsCount  = ProductVariant::where('is_active', true)->count();
 
         return Inertia::render('inventory/products/index', [
-            'products' => $products,
+            'products'   => $products,
             'categories' => Category::all(['id', 'name']),
-            'suppliers' => Supplier::all(['id', 'name']),
-            // Para mantener filtros seleccionados en el frontend si quieres:
-            'filters' => $request->only('search', 'category_id', 'supplier_id'),
+            'suppliers'  => Supplier::all(['id', 'name']),
+            'storeStats' => [
+                'current' => [
+                    'store_id'         => $storeId,
+                    // 👉 catálogos (no dependen de inventory)
+                    'catalog_products'        => $catalogProductsCount,
+                    'catalog_active_products' => $catalogActiveProductsCount,
+                    'catalog_variants'        => $catalogVariantsCount,
+                    'catalog_active_variants' => $catalogActiveVariantsCount,
+                    // 👉 métricas por tienda basadas en inventory (pueden ser 1 si sólo hay 1 fila en esa tienda)
+                    'products'         => $productsCountStore,
+                    'active_products'  => $activeProductsCountStore,
+                    'variants'         => $variantsCountStore,
+                ],
+            ],
+            'filters'    => $request->only([
+                'search',
+                'category_id',
+                'supplier_id',
+                'min_price',
+                'max_price',
+                'sort_field',
+                'sort_direction',
+                'only_low_stock',
+                'only_active',
+                'store_id',
+                'low_stock_threshold'
+            ]),
         ]);
     }
+
 
 
     public function create()
@@ -60,168 +186,101 @@ class ProductController extends Controller
 
     public function store(StoreProductRequest $request)
     {
-        $validatedData = $request->validated();
+        $product = $this->productService->createProduct($request);
 
-        $product = DB::transaction(function () use ($validatedData, $request) {
-            // 1. Crear el producto "padre"
-            $product = Product::create($validatedData);
-
-            // 2. Manejar la subida de la imagen
-            $imagePath = null;
-            if ($request->hasFile('image')) {
-                $imagePath = $request->file('image')->store('images/products', 'public');
-            }
-
-            // 3. Recorrer y crear cada variante
-            foreach ($validatedData['variants'] as $index => $variantData) {
-
-                // 4. Parsear la cadena de atributos a un objeto JSON
-                $attributesObject = $this->parseAttributes($variantData['attributes'] ?? null);
-
-                // 5. Crear la variante en la base de datos
-                $product->variants()->create([
-                    'sku'           => $variantData['sku'],
-                    'selling_price' => $variantData['selling_price'],
-                    'cost_price'    => $variantData['cost_price'],
-                    'attributes'    => $attributesObject,
-                    // Asigna la imagen solo a la primera variante
-                    'image_path'    => $index === 0 ? $imagePath : null,
-                ]);
-            }
-
-            // (Lógica de inventario inicial se haría aquí si es necesario)
-
-            return $product;
-        });
-
-        return to_route('inventory.products.index')->with('success', 'Producto "' . $product->name . '" creado exitosamente.');
+        return to_route('inventory.products.index')
+            ->with('success', 'Producto "' . $product->name . '" creado exitosamente.');
     }
 
-    public function show(Request $request, Product $product)
+    public function show(Product $product)
     {
-        $storeId = $request->integer('store_id') ?: null;
-
         $product->load([
             'category:id,name',
             'supplier:id,name',
-            'variants:id,product_id,sku,barcode,attributes,cost_price,selling_price,image_path',
             'variants.inventory.store:id,name',
         ]);
 
-        // IDs de las variantes del producto
-        $variantIds = $product->variants->pluck('id');
+        // Sumar stock y umbrales por tienda (todas las variantes del producto)
+        $perStore = collect();
+        $totalStock = 0;
 
-        // Opciones de Tienda (solo tiendas que tienen alguna existencia o movimiento del producto)
-        $stores = Store::select('stores.id', 'stores.name')
-            ->where(function ($q) use ($variantIds) {
-                $q->whereExists(function ($sub) use ($variantIds) {
-                    $sub->select(DB::raw(1))
-                        ->from('inventory')
-                        ->whereColumn('inventory.store_id', 'stores.id')
-                        ->whereIn('inventory.product_variant_id', $variantIds);
-                })->orWhereExists(function ($sub) use ($variantIds) {
-                    $sub->select(DB::raw(1))
-                        ->from('product_stock_movements')
-                        ->whereColumn('product_stock_movements.store_id', 'stores.id')
-                        ->whereIn('product_stock_movements.product_variant_id', $variantIds);
-                });
-            })
-            ->orderBy('stores.name')
-            ->get();
+        foreach ($product->variants as $variant) {
+            foreach ($variant->inventory as $inv) {
+                if (!$perStore->has($inv->store_id)) {
+                    $perStore[$inv->store_id] = [
+                        'store'      => ['id' => $inv->store->id, 'name' => $inv->store->name],
+                        'qty'        => 0,
+                        'threshold'  => 0,
+                        'low'        => false, // se calculará abajo
+                    ];
+                }
+                $entry = $perStore[$inv->store_id];
 
-        // --- Stock (global o por tienda) ---
-        if ($storeId) {
-            // Totales por TIENDA seleccionada
-            $rows = DB::table('inventory')
-                ->select('store_id', DB::raw('SUM(quantity) as qty'))
-                ->where('store_id', $storeId)
-                ->whereIn('product_variant_id', $variantIds)
-                ->groupBy('store_id')
-                ->get();
+                $entry['qty']       += (int) $inv->quantity;
+                $entry['threshold'] += (int) $inv->stock_alert_threshold;
 
-            $perStore = $rows->map(function ($r) {
-                return [
-                    'store' => ['id' => (int) $r->store_id, 'name' => Store::find($r->store_id)?->name ?? 'Tienda'],
-                    'qty'   => (int) $r->qty,
-                ];
-            })->values();
+                // Marca "low" si alguna variante en esa tienda está por debajo de su propio umbral
+                if ((int)$inv->quantity <= (int)$inv->stock_alert_threshold) {
+                    $entry['low'] = true;
+                }
 
-            $totalStock = (int) ($rows->first()->qty ?? 0);
-        } else {
-            // Totales en TODAS las tiendas
-            $rows = DB::table('inventory')
-                ->join('stores', 'stores.id', '=', 'inventory.store_id')
-                ->select('inventory.store_id', 'stores.name', DB::raw('SUM(inventory.quantity) as qty'))
-                ->whereIn('inventory.product_variant_id', $variantIds)
-                ->groupBy('inventory.store_id', 'stores.name')
-                ->orderBy('stores.name')
-                ->get();
-
-            $perStore = $rows->map(fn($r) => [
-                'store' => ['id' => (int) $r->store_id, 'name' => $r->name],
-                'qty'   => (int) $r->qty,
-            ])->values();
-
-            $totalStock = (int) $rows->sum('qty');
-        }
-
-        $stock = [
-            'total'     => $totalStock,
-            'per_store' => $perStore,
-        ];
-
-        // --- Existencia por variante (solo si hay tienda seleccionada) ---
-        $variantStock = [];
-        if ($storeId) {
-            $vs = DB::table('inventory')
-                ->select('product_variant_id', DB::raw('SUM(quantity) as qty'))
-                ->where('store_id', $storeId)
-                ->whereIn('product_variant_id', $variantIds)
-                ->groupBy('product_variant_id')
-                ->get();
-
-            foreach ($vs as $r) {
-                $variantStock[(int) $r->product_variant_id] = (int) $r->qty;
+                $perStore[$inv->store_id] = $entry;
+                $totalStock += (int) $inv->quantity;
             }
         }
 
-        // --- Movimientos (filtrados opcionalmente por tienda) ---
-        $movements = ProductStockMovement::query()
-            ->with([
-                'store:id,name',
-                'variant:id,sku,product_id',
-                'user:id,name',
-            ])
-            ->whereIn('product_variant_id', $variantIds)
-            ->when($storeId, fn($q) => $q->where('store_id', $storeId))
-            ->latest()
-            ->limit(20)
-            ->get()
-            ->map(fn($m) => [
-                'id'          => $m->id,
-                'date'        => $m->created_at?->toIso8601String(),
-                'type'        => $m->type,          // purchase_entry | sale_exit | adjustment_in | adjustment_out
-                'type_label'  => $m->type_label,    // Texto legible
-                'quantity'    => $m->signed_quantity, // con signo
-                'unit_price'  => $m->unit_price,
-                'subtotal'    => $m->subtotal,
-                'notes'       => $m->notes,
-                'store'       => $m->store ? ['id' => $m->store->id, 'name' => $m->store->name] : null,
-                'variant'     => $m->variant ? ['id' => $m->variant->id, 'sku' => $m->variant->sku] : null,
-                'user'        => $m->user ? ['id' => $m->user->id, 'name' => $m->user->name] : null,
-            ]);
+        // Si el total por tienda también está por debajo del umbral agregado, marcamos low
+        $perStore = $perStore->map(function ($entry) {
+            if ($entry['qty'] <= $entry['threshold']) {
+                $entry['low'] = true;
+            }
+            return $entry;
+        });
+
+        $stock = [
+            'total'     => $totalStock,
+            'per_store' => array_values($perStore->all()),
+        ];
+
+        // Movimientos recientes
+        $movements = [];
+        if (class_exists(ProductStockMovement::class)) {
+            $variantIds = $product->variants->pluck('id');
+
+            $movements = ProductStockMovement::query()
+                ->with([
+                    'store:id,name',
+                    'variant:id,sku,product_id',
+                    'user:id,name',
+                ])
+                ->whereIn('product_variant_id', $variantIds)
+                ->latest()
+                ->limit(100)
+                ->get()
+                ->map(fn($m) => [
+                    'id'         => $m->id,
+                    'date'       => $m->created_at?->toIso8601String(),
+                    'type'       => $m->type,
+                    'quantity'   => $m->quantity,
+                    'unit_price' => $m->unit_price,
+                    'subtotal'   => $m->subtotal,
+                    'store'      => $m->store ? ['id' => $m->store->id, 'name' => $m->store->name] : null,
+                    'variant'    => $m->variant ? ['id' => $m->variant->id, 'sku' => $m->variant->sku] : null,
+                    'user'       => $m->user ? ['id' => $m->user->id, 'name' => $m->user->name] : null,
+                    'notes'      => $m->notes,
+                ]);
+        }
+
+        // Tiendas (para filtros y ajuste rápido)
+        $stores = Store::select('id', 'name')->orderBy('name')->get();
 
         return Inertia::render('inventory/products/show', [
-            'product'            => $product,
-            'stock'              => $stock,
-            'movements'          => $movements,
-            'stores'             => $stores,
-            'selected_store_id'  => $storeId,
-            'variant_stock'      => $variantStock, // { [variantId]: qty } solo si hay tienda
+            'product'   => $product,  // incluye variants con image_url
+            'stock'     => $stock,
+            'movements' => $movements,
+            'stores'    => $stores,
         ]);
     }
-
-
     public function edit(Product $product)
     {
         return Inertia::render('inventory/products/edit', [
@@ -234,67 +293,11 @@ class ProductController extends Controller
 
     public function update(UpdateProductRequest $request, Product $product)
     {
-        $validatedData = $request->validated();
-
-        DB::transaction(function () use ($validatedData, $request, $product) {
-            // 1. Actualizar datos del producto principal
-            $product->update($validatedData);
-
-            $incomingVariants = collect($validatedData['variants']);
-            $existingVariantIds = $product->variants->pluck('id');
-            $incomingVariantIds = $incomingVariants->pluck('id')->filter();
-
-            // 2. Eliminar variantes que ya no están en el formulario
-            $variantsToDelete = $existingVariantIds->diff($incomingVariantIds);
-            if ($variantsToDelete->isNotEmpty()) {
-                ProductVariant::destroy($variantsToDelete);
-            }
-
-            // 3. Actualizar o Crear variantes (SIN TOCAR LA IMAGEN)
-            foreach ($incomingVariants as $variantData) {
-                $attributesObject = $this->parseAttributes($variantData['attributes'] ?? null);
-
-
-                // Esta parte ahora NO incluye 'image_path', preservando el valor existente
-                if (!empty($variantData['id'])) {
-                    $product->variants()->whereKey($variantData['id'])->update([
-                        'sku'           => $variantData['sku'],
-                        'selling_price' => $variantData['selling_price'],
-                        'cost_price'    => $variantData['cost_price'],
-                        'attributes'    => $attributesObject,
-                    ]);
-                } else {
-                    $product->variants()->create([
-                        'sku'           => $variantData['sku'],
-                        'selling_price' => $variantData['selling_price'],
-                        'cost_price'    => $variantData['cost_price'],
-                        'attributes'    => $attributesObject,
-                    ]);
-                }
-            }
-
-            // 4. LÓGICA DE LA IMAGEN (SEPARADA Y CONDICIONAL)
-            // Esta sección se ejecuta solo si se sube un nuevo archivo.
-            if ($request->hasFile('image')) {
-                // Recargamos la relación por si se crearon nuevas variantes
-                $product->load('variants');
-                $variantToUpdate = $product->variants()->first();
-
-                // Si la variante principal ya tenía una imagen, la borramos
-                if ($variantToUpdate && $variantToUpdate->image_path) {
-                    Storage::disk('public')->delete($variantToUpdate->image_path);
-                }
-
-                // Guardamos la nueva imagen y actualizamos solo ese campo
-                $imagePath = $request->file('image')->store('images/products', 'public');
-                if ($variantToUpdate) {
-                    $variantToUpdate->update(['image_path' => $imagePath]);
-                }
-            }
-        });
+        $this->productService->updateProduct($request, $product);
 
         return to_route('inventory.products.index')->with('success', 'Producto actualizado.');
     }
+
 
     public function destroy(Product $product)
     {
@@ -315,19 +318,144 @@ class ProductController extends Controller
     }
 
 
-    private function parseAttributes(mixed $raw): ?array
+
+    public function stockTimeseries(Request $request, Product $product)
     {
-        if (is_array($raw)) {
-            return $raw;
+        // Filtros
+        $storeId   = $request->integer('store_id') ?: null;
+        $variantId = $request->integer('variant_id') ?: null;
+
+        // Rango de fechas (por defecto últimos 30 días)
+        $to   = $request->date('to')   ? CarbonImmutable::parse($request->date('to'))->endOfDay()   : now()->endOfDay();
+        $from = $request->date('from') ? CarbonImmutable::parse($request->date('from'))->startOfDay() : $to->subDays(29)->startOfDay();
+
+        // Variantes a incluir
+        $variantIds = $variantId
+            ? collect([(int) $variantId])
+            : $product->variants()->pluck('id');
+
+        // Helper para signo de movimientos
+        $signedExpr = "CASE WHEN type IN ('purchase_entry','adjustment_in') THEN quantity ELSE -quantity END";
+
+        // --- 1) Flujos diarios dentro del rango ---
+        $flows = ProductStockMovement::query()
+            ->selectRaw("DATE(created_at) as d")
+            ->selectRaw("SUM(CASE WHEN type IN ('purchase_entry','adjustment_in') THEN quantity ELSE 0 END) as in_qty")
+            ->selectRaw("SUM(CASE WHEN type IN ('sale_exit','adjustment_out') THEN quantity ELSE 0 END) as out_qty")
+            ->selectRaw("SUM($signedExpr) as net_qty")
+            ->whereIn('product_variant_id', $variantIds)
+            ->when($storeId, fn($q) => $q->where('store_id', $storeId))
+            ->whereBetween('created_at', [$from, $to])
+            ->groupBy(DB::raw('DATE(created_at)'))
+            ->orderBy('d')
+            ->get()
+            ->keyBy(fn($r) => CarbonImmutable::parse($r->d)->toDateString());
+
+        // --- 2) Stock actual (inventario al día de hoy) ---
+        $currentStock = Inventory::query()
+            ->whereIn('product_variant_id', $variantIds)
+            ->when($storeId, fn($q) => $q->where('store_id', $storeId))
+            ->sum('quantity');
+
+        // --- 3) Delta desde "from" hasta ahora (para calcular baseline en "from") ---
+        $netFromToNow = ProductStockMovement::query()
+            ->whereIn('product_variant_id', $variantIds)
+            ->when($storeId, fn($q) => $q->where('store_id', $storeId))
+            ->where('created_at', '>=', $from)
+            ->sum(DB::raw($signedExpr));
+
+        // Stock al inicio del rango = stock actual - movimientos desde 'from' hasta ahora
+        $baseline = (int) $currentStock - (float) $netFromToNow;
+
+        // --- 4) Construir serie diaria completa (rellenando días sin movimientos) ---
+        $series = [];
+        $cursor = $from;
+        $running = (float) $baseline;
+
+        while ($cursor->lte($to)) {
+            $key = $cursor->toDateString();
+
+            // --- CORRECCIÓN ---
+            // Obtenemos el registro del día de forma segura. Si no existe, será null.
+            $day_flow = $flows->get($key);
+
+            // Usamos el operador de fusión de null (??) para asignar 0 si el registro o la propiedad no existen.
+            // Esto evita el error "Trying to get property of non-object".
+            $in  = (float) ($day_flow->in_qty ?? 0);
+            $out = (float) ($day_flow->out_qty ?? 0);
+            $net = (float) ($day_flow->net_qty ?? 0);
+            $running += $net;
+
+            $series[] = [
+                'date'    => $key,
+                'in'      => round($in, 2),
+                'out'     => round($out, 2),
+                'net'     => round($net, 2),
+                'stock'   => round($running, 2), // nivel de existencias
+            ];
+
+            $cursor = $cursor->addDay();
         }
-        if (is_string($raw) && trim($raw) !== '') {
-            return collect(explode(',', $raw))
-                ->mapWithKeys(function ($pair) {
-                    [$k, $v] = array_pad(array_map('trim', explode(':', $pair, 2)), 2, null);
-                    return $k && $v ? [$k => $v] : [];
-                })
-                ->toArray();
-        }
-        return null;
+
+        // Variantes (para combo en el front)
+        $variants = $product->variants()
+            ->select('id', 'sku')
+            // Se quitó whereIn para mostrar siempre todas las variantes del producto en el selector
+            ->orderBy('sku')
+            ->get();
+
+        return response()->json([
+            'meta' => [
+                'product_id' => $product->id,
+                'store_id'   => $storeId,
+                'variant_id' => $variantId,
+                'from'       => $from->toDateString(),
+                'to'         => $to->toDateString(),
+                'baseline'   => (float) $baseline,
+                'current'    => (float) $currentStock,
+            ],
+            'variants' => $variants,
+            'series'   => $series, // [{ date, in, out, net, stock }]
+        ]);
+    }
+
+
+    public function exportMovements(Product $product): StreamedResponse
+    {
+        $variantIds = $product->variants()->pluck('id');
+
+        $rows = ProductStockMovement::with(['store:id,name', 'variant:id,sku', 'user:id,name'])
+            ->whereIn('product_variant_id', $variantIds)
+            ->orderByDesc('created_at')
+            ->get();
+
+        $filename = 'product_' . $product->id . '_movements_' . now()->format('Ymd_His') . '.csv';
+
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ];
+
+        return response()->stream(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            // BOM para Excel
+            fwrite($out, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
+            fputcsv($out, ['Fecha', 'Tipo', 'Tienda', 'SKU', 'Cantidad', 'P.Unit', 'Subtotal', 'Usuario', 'Notas']);
+            foreach ($rows as $m) {
+                fputcsv($out, [
+                    optional($m->created_at)->toDateTimeString(),
+                    $m->type,
+                    optional($m->store)->name,
+                    optional($m->variant)->sku,
+                    $m->quantity,
+                    $m->unit_price,
+                    $m->subtotal,
+                    optional($m->user)->name,
+                    $m->notes,
+                ]);
+            }
+            fclose($out);
+        }, 200, $headers);
     }
 }

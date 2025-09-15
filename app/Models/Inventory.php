@@ -35,7 +35,7 @@ class Inventory extends Model
     public function variant(): BelongsTo
     {
         // El nombre correcto de la tabla es 'product_variants'
-        return $this->belongsTo(ProductVariant::class . 'product_variant_id');
+        return $this->belongsTo(ProductVariant::class, 'product_variant_id');
     }
 
     // // Accesor útil para alertas (opcionalmente: protected $appends = ['low_stock'];)
@@ -44,11 +44,11 @@ class Inventory extends Model
     //     return Attribute::get(fn() => $this->quantity <= $this->stock_alert_threshold);
     // }
 
-    // // Scopes prácticos
-    // public function scopeLowStock($query)
-    // {
-    //     return $query->whereColumn('quantity', '<=', 'stock_alert_threshold');
-    // }
+    // Scopes prácticos
+    public function scopeLowStock($query)
+    {
+        return $query->whereColumn('quantity', '<=', 'stock_alert_threshold');
+    }
 
     // public function scopeForStore($query, int $storeId)
     // {

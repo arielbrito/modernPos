@@ -55,10 +55,20 @@ class PurchaseReceivingService
                     ->lockForUpdate()
                     ->first();
 
+                if (!$inventory) {
+                    $inventory = Inventory::create([
+                        'store_id' => $purchase->store_id,
+                        'product_variant_id' => $item->product_variant_id,
+                        'quantity' => 0,
+                        'stock_alert_threshold' => 5,
+                    ]);
+
+                    $inventory = Inventory::whereKey($inventory->id)->lockForUpdate()->first();
+                }
+
                 $stockAnterior = (float) $inventory->quantity;
                 $inventory->increment('quantity', $qtyToReceive);
 
-                // 2. Actualizamos los costos en la tabla 'product_variants'
                 $variant = $item->productVariant()->lockForUpdate()->first();
                 $avgAnterior = (float) $variant->average_cost;
 
@@ -68,9 +78,10 @@ class PurchaseReceivingService
                     : $unitCostFinal;
 
                 $variant->update([
-                    'last_cost' => $unitCostFinal,
-                    'average_cost' => $avgNuevo,
+                    'last_cost'    => round($unitCostFinal, 4),
+                    'average_cost' => round($avgNuevo, 4),
                 ]);
+
 
                 if ((float)$item->qty_received < (float)$item->qty_ordered) {
                     $allReceived = false;

@@ -26,6 +26,9 @@ return new class extends Migration
 
             $table->text('notes')->nullable();
             $table->timestamps();
+
+            $table->index(['product_variant_id', 'store_id']);
+            $table->index('created_at');
         });
     }
 

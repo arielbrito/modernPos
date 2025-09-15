@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -19,6 +20,20 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        Gate::define(
+            'dgii.lookup',
+            fn($user) =>
+            // ajusta a tu lógica real
+            $user->hasRole('Super-Admin') || $user->can('customers.view')
+        );
+        Gate::define('dgii.import', fn($u) => $u->can('dgii.import'));
+        Gate::define('ncf.manage', fn($u) => $u->can('ncf.manage'));
+        Gate::define('ncf.consume', fn($u) => $u->can('ncf.consume'));
+        Gate::define('ncf.view', fn($u) => $u->can('ncf.view'));
+        Gate::define('ncf.peek', fn($u) => $u->can('ncf.peek'));
+        Gate::define('registers.view', fn($u) => $u->can('registers.view'));
+        Gate::define('registers.manage', fn($u) => $u->can('registers.manage'));
+        Gate::define('registers.select', fn($u) => $u->can('registers.select'));
+        Gate::define('cash_shirt.open', fn($u) => $u->can('cash_shirt.open'));
     }
 }

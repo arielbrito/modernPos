@@ -16,19 +16,33 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // 1. Ejecutar el seeder de roles y permisos
-        $this->call(RolesAndPermissionsSeeder::class);
+        $this->call([
+            PermissionsSeeder::class,
+            NcfSequencesSeeder::class,
+            DefaultCustomersSeeder::class,
+            CategorySeeder::class,
+            SupplierSeeder::class,
+            ProductSeeder::class,
+            CurrencySeeder::class,
+            CashDenominationSeeder::class,
+            RegisterSeeder::class,
+        ]);
 
         // 2. Crear una tienda principal
         $mainStore = Store::firstOrCreate(
             ['code' => 'MAIN'],
-            ['name' => 'Tienda Principal', 'rnc' => '001-0000000-0', 'is_active' => true]
+            ['name' => 'The Coffee Stop', 'rnc' => '00100000000', 'is_active' => true]
         );
 
         // 3. Crear el usuario Super-Admin
         $superAdmin = User::firstOrCreate(
             ['email' => 'admin@modernpos.com'],
-            ['name' => 'Super Admin', 'password' => Hash::make('Joker@7890')]
+            ['name' => 'Super Admin', 'password' => Hash::make('Joker@7890')],
+            ['email_verified_at' => now()]
         );
+
+        $superAdmin->forceFill(['email_verified_at' => now()])->save();
+
 
         // 4. Obtener el rol de Super-Admin
         $superAdminRole = Role::where('name', 'Super-Admin')->first();

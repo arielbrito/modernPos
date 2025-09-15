@@ -2,42 +2,69 @@
 
 use App\Http\Controllers\Inventory\CategoryController;
 use App\Http\Controllers\Inventory\ProductController;
-use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Inventory\ProductStockController;
 use App\Http\Controllers\Inventory\PurchaseController;
 use App\Http\Controllers\Inventory\SupplierController;
+use Illuminate\Support\Facades\Route;
+
+/*
+|--------------------------------------------------------------------------
+| Módulo de Inventario
+|--------------------------------------------------------------------------
+|
+| Todas las rutas relacionadas con la gestión de inventario, productos,
+| compras y suplidores.
+|
+*/
 
 Route::middleware(['auth'])->prefix('inventory')->name('inventory.')->group(function () {
+
+    // --- Productos y Variantes ---
     Route::resource('products', ProductController::class);
+
+    // Rutas específicas para un producto (acciones adicionales)
+    Route::controller(ProductController::class)->prefix('products/{product}')->name('products.')->group(function () {
+        Route::get('movements/export', 'exportMovements')->name('movements.export');
+        Route::get('stock-timeseries', 'stockTimeseries')->name('stockTimeseries');
+    });
+
+    // Rutas para Variantes (ajustes de inventario)
+    Route::post('variants/{variant}/adjust', [ProductStockController::class, 'adjust'])
+        ->name('variants.adjust');
+
+
+    // --- Categorías ---
     Route::resource('categories', CategoryController::class);
 
-    Route::get('purchases/search-products', [PurchaseController::class, 'searchProducts'])->name('purchases.searchProducts');
 
-    Route::get('purchases', [PurchaseController::class, 'index'])
-        ->name('purchases.index');
-
-    Route::get('purchases/create', [PurchaseController::class, 'create'])
-        ->name('purchases.create')
-    ;
-
-    Route::get('purchases/{purchase}', [PurchaseController::class, 'show'])
-        ->name('purchases.show') // Corregido el nombre a plural por consistencia
-    ;
-
-
-    Route::post('purchases', [PurchaseController::class, 'store'])
-        ->name('purchases.store');
-
-    Route::post('purchases/{purchase}/approve', [PurchaseController::class, 'approve'])
-        ->name('purchases.approve');
-
-    Route::post('purchases/{purchase}/receive', [PurchaseController::class, 'receive'])
-        ->name('purchases.receive');
-
-    Route::post('purchases/{purchase}/payments', [PurchaseController::class, 'storePayment'])
-        ->name('purchases.payments.store');
-
-    Route::post('purchases/{purchase}/cancel', [PurchaseController::class, 'cancel'])
-        ->name('purchases.cancel');
+    // --- Suplidores ---
     Route::resource('suppliers', SupplierController::class);
-    // ... otras rutas del módulo
+
+
+    // --- Compras ---
+    Route::controller(PurchaseController::class)->prefix('purchases')->name('purchases.')->group(function () {
+        // Rutas de colección (no dependen de una compra específica)
+        Route::get('/', 'index')->name('index');
+        Route::get('/create', 'create')->name('create');
+        Route::post('/', 'store')->name('store');
+        Route::get('/search-products', 'searchProducts')->name('searchProducts');
+
+        // Rutas de miembro (aplican a una compra específica)
+        Route::prefix('{purchase}')->group(function () {
+            Route::get('/', 'show')->name('show');
+            Route::post('/approve', 'approve')->name('approve');
+            Route::post('/receive', 'receive')->name('receive');
+            Route::post('/cancel', 'cancel')->name('cancel');
+
+            // Pagos de la compra
+            Route::post('/payments', 'storePayment')->name('payments.store');
+
+            // Archivos adjuntos de la compra
+            Route::prefix('attachments')->name('attachments.')->group(function () {
+                Route::post('/', 'uploadAttachment')->name('upload');
+                Route::get('/{attachment}', 'downloadAttachment')->name('download');
+                Route::delete('/{attachment}', 'destroyAttachment')->name('destroy');
+            });
+        });
+    });
 });

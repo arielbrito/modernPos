@@ -23,23 +23,27 @@ class PosController extends Controller
     public function searchProducts(Request $request)
     {
         $term = $request->query('term', '');
+        $limit = (int)$request->query('limit', 10);
 
-        if (strlen($term) < 2) {
-            return response()->json([]);
+        $q = Product::query()
+            ->select('id', 'name')
+            ->with(['variants' => fn($v) => $v->select('id', 'product_id', 'sku', 'barcode', 'selling_price', 'image_path', 'is_taxable', 'tax_code', 'tax_rate')]);
+
+        if ($term !== '' && mb_strlen($term) >= 2) {
+            $q->where(function ($qq) use ($term) {
+                $qq->where('name', 'ILIKE', "%{$term}%")
+                    ->orWhereHas(
+                        'variants',
+                        fn($vq) =>
+                        $vq->where('sku', 'ILIKE', "%{$term}%")
+                            ->orWhere('barcode', 'ILIKE', "%{$term}%")
+                    );
+            });
+        } else {
+            $q->latest('id'); // o ->orderBy('name')
         }
 
-        $products = Product::with('variants') // Cargar las variantes para tener precio y SKU
-            ->where(function ($query) use ($term) {
-                $query->where('name', 'ILIKE', "%{$term}%") // ILIKE es para búsqueda no sensible a mayúsculas en PostgreSQL
-                    ->orWhereHas('variants', function ($subQuery) use ($term) {
-                        $subQuery->where('sku', 'ILIKE', "%{$term}%")
-                            ->orWhere('barcode', 'ILIKE', "%{$term}%");
-                    });
-            })
-            ->take(10) // Limitar los resultados a 10 para no saturar
-            ->get();
-
-        return response()->json($products);
+        return response()->json($q->limit($limit)->get());
     }
 
     public function storeSale(Request $request)

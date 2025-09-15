@@ -25,6 +25,8 @@ return new class extends Migration
             $table->decimal('landed_cost_alloc', 14, 4)->default(0); // prorrateo flete/otros
             $table->decimal('line_total', 14, 2); // total final de la línea
             $table->timestamps();
+
+            $table->index('product_variant_id');
         });
     }
 

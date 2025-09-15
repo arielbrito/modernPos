@@ -19,8 +19,12 @@ class SupplierController extends Controller
         $q = trim((string) $request->get('q', ''));
 
         $suppliers = Supplier::query()
-            // ✅ Se añade el conteo de la relación 'purchases'
-            ->withCount('purchases')
+            // ✅ Contar únicamente las compras aprobadas
+            ->withCount([
+                'purchases as purchases_count' => function ($q) {
+                    $q->where('status', 'received'); // si tienes un scope ->approved(), úsalo aquí
+                },
+            ])
             ->when($q !== '', function ($query) use ($q) {
                 $query->where(function ($w) use ($q) {
                     $w->where('name', 'like', "%{$q}%")
@@ -35,7 +39,7 @@ class SupplierController extends Controller
 
         return inertia('inventory/suppliers/index', [
             'supliers' => $suppliers,
-            'filters' => ['q' => $q],
+            'filters'  => ['q' => $q],
         ]);
     }
 
@@ -62,13 +66,29 @@ class SupplierController extends Controller
      */
     public function show(Supplier $supplier)
     {
-        $supplier->loadCount('purchases');
+        // ✅ Contar únicamente las compras recibidas
+        $supplier->loadCount([
+            'purchases as purchases_count' => function ($q) {
+                $q->where('status', 'received'); // si tienes scope ->received(), úsalo aquí
+            },
+        ]);
 
+        // ✅ Traer solo abiertas (saldo > 0) y con status 'received'
         $open = $supplier->purchases()
+            ->where('status', 'received')           // <- filtro por estado
             ->where('balance_total', '>', 0)
             ->orderByDesc('invoice_date')
             ->orderByDesc('id')
-            ->get(['id', 'code', 'invoice_number', 'invoice_date', 'created_at', 'grand_total', 'paid_total', 'balance_total']);
+            ->get([
+                'id',
+                'code',
+                'invoice_number',
+                'invoice_date',
+                'created_at',
+                'grand_total',
+                'paid_total',
+                'balance_total'
+            ]);
 
         $today = now()->startOfDay();
         $open->transform(function ($p) use ($today) {
@@ -105,6 +125,7 @@ class SupplierController extends Controller
             'aging'         => $aging,
         ]);
     }
+
 
     /**
      * Show the form for editing the specified resource.

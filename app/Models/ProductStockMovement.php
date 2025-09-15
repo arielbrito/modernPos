@@ -11,7 +11,7 @@ class ProductStockMovement extends Model
 {
     use HasFactory;
     protected $fillable = [
-        'product_varian_id',
+        'product_variant_id',
         'store_id',
         'type',
         'quantity',
@@ -20,7 +20,8 @@ class ProductStockMovement extends Model
         'user_id',
         'notes',
         'source_type',
-        'source_id'
+        'source_id',
+
     ];
 
     protected $casts = [
