@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { dashboard, login, register } from '@/routes';
 import { type SharedData } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
@@ -30,12 +31,12 @@ const AuthNav = ({ user }: { user: SharedData['auth']['user'] }) => (
                         Iniciar Sesión
                     </Link>
                 </Button>
-                <Button asChild>
+                {/* <Button asChild>
                     <Link href={register()}>
                         <UserPlus className="mr-2 h-4 w-4" />
                         Registrarse
                     </Link>
-                </Button>
+                </Button> */}
             </>
         )}
     </nav>
@@ -52,7 +53,7 @@ export default function Welcome() {
 
     return (
         <>
-            <Head title="Bienvenido a CashFlow" />
+            <Head title="Bienvenido a ModernPos" />
             <div className="flex min-h-screen flex-col bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-200">
                 {/* Header */}
                 <motion.header
@@ -97,7 +98,7 @@ export default function Welcome() {
 
                         <motion.div variants={FADE_IN_ANIMATION_VARIANTS}>
                             <Button asChild size="lg" className="text-base font-bold">
-                                {auth.user ? <Link href={dashboard()}>Ir al Dashboard</Link> : <Link href={register()}>Comenzar Ahora</Link>}
+                                {auth.user ? <Link href={dashboard()}>Ir al Dashboard</Link> : <Link href={login()}>Comenzar Ahora</Link>}
                             </Button>
                         </motion.div>
                     </motion.div>

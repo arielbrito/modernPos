@@ -1,88 +1,136 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import AuthenticatedSessionController from '@/actions/App/Http/Controllers/Auth/AuthenticatedSessionController';
 import InputError from '@/components/input-error';
-import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import AuthLayout from '@/layouts/auth-layout';
 import { register } from '@/routes';
 import { request } from '@/routes/password';
-import { Form, Head } from '@inertiajs/react';
-import { LoaderCircle } from 'lucide-react';
+import { Head, Link, useForm } from '@inertiajs/react';
+import { LoaderCircle, Box, LogIn } from 'lucide-react';
+import { motion } from 'framer-motion';
+import React from 'react';
 
 interface LoginProps {
     status?: string;
-    canResetPassword: boolean;
+    canResetPassword?: boolean;
 }
 
-export default function Login({ status, canResetPassword }: LoginProps) {
-    return (
-        <AuthLayout title="Log in to your account" description="Enter your email and password below to log in">
-            <Head title="Log in" />
+const Logo = () => (
+    <div className="flex items-center gap-2 mb-8">
+        <Box className="h-8 w-8 text-emerald-500" />
+        <span className="text-3xl font-bold tracking-tight text-slate-800 dark:text-slate-200">
+            ModernPos
+        </span>
+    </div>
+);
 
-            <Form {...AuthenticatedSessionController.store.form()} resetOnSuccess={['password']} className="flex flex-col gap-6">
-                {({ processing, errors }) => (
-                    <>
-                        <div className="grid gap-6">
-                            <div className="grid gap-2">
-                                <Label htmlFor="email">Email address</Label>
+export default function Login({ status, canResetPassword }: LoginProps) {
+    const { data, setData, post, processing, errors, reset } = useForm({
+        email: '',
+        password: '',
+        remember: false,
+    });
+
+    const submit = (e: React.FormEvent) => {
+        e.preventDefault();
+        post(AuthenticatedSessionController.store.url(), {
+            onFinish: () => reset('password'),
+        });
+    };
+
+    return (
+        <>
+            <Head title="Iniciar Sesión" />
+            <div className="min-h-screen w-full lg:grid lg:grid-cols-2">
+                {/* Columna Izquierda: Branding y Bienvenida */}
+                <div className="hidden lg:flex flex-col items-center justify-center p-10 bg-slate-100 dark:bg-slate-800/50 border-r dark:border-slate-800">
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.8, ease: "easeInOut" }}
+                        className="text-center"
+                    >
+                        <Logo />
+                        <h1 className="text-3xl font-bold tracking-tight mt-4">
+                            Bienvenido de Nuevo
+                        </h1>
+                        <p className="mt-2 text-slate-600 dark:text-slate-400">
+                            Gestiona tus ventas e inventario de forma simple y eficiente.
+                        </p>
+
+                    </motion.div>
+                </div>
+
+                {/* Columna Derecha: Formulario de Login */}
+                <div className="flex items-center justify-center p-6 sm:p-12">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.5, ease: "easeOut" }}
+                        className="w-full max-w-sm"
+                    >
+                        <div className="lg:hidden">
+                            <Logo />
+                        </div>
+                        <div className="mb-6 text-left">
+                            <h2 className="text-2xl font-bold">Iniciar Sesión</h2>
+                            <p className="text-muted-foreground">Ingresa tus credenciales para acceder a tu cuenta.</p>
+                        </div>
+
+                        {status && <div className="mb-4 text-sm font-medium text-green-600">{status}</div>}
+
+                        <form onSubmit={submit} className="space-y-4">
+                            <div className="grid gap-1.5">
+                                <Label htmlFor="email">Email</Label>
                                 <Input
-                                    id="email"
-                                    type="email"
-                                    name="email"
-                                    required
-                                    autoFocus
-                                    tabIndex={1}
-                                    autoComplete="email"
-                                    placeholder="email@example.com"
+                                    id="email" type="email" name="email" value={data.email}
+                                    autoComplete="username" autoFocus
+                                    onChange={(e) => setData('email', e.target.value)}
+                                    placeholder="tunegocio@email.com"
                                 />
                                 <InputError message={errors.email} />
                             </div>
 
-                            <div className="grid gap-2">
-                                <div className="flex items-center">
-                                    <Label htmlFor="password">Password</Label>
+                            <div className="grid gap-1.5">
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="password">Contraseña</Label>
                                     {canResetPassword && (
-                                        <TextLink href={request()} className="ml-auto text-sm" tabIndex={5}>
-                                            Forgot password?
-                                        </TextLink>
+                                        <Link href={request()} className="text-sm font-medium text-primary hover:underline">
+                                            ¿Olvidaste tu contraseña?
+                                        </Link>
                                     )}
                                 </div>
                                 <Input
-                                    id="password"
-                                    type="password"
-                                    name="password"
-                                    required
-                                    tabIndex={2}
+                                    id="password" type="password" name="password" value={data.password}
                                     autoComplete="current-password"
-                                    placeholder="Password"
+                                    onChange={(e) => setData('password', e.target.value)}
+                                    placeholder="••••••••"
                                 />
                                 <InputError message={errors.password} />
                             </div>
 
-                            <div className="flex items-center space-x-3">
-                                <Checkbox id="remember" name="remember" tabIndex={3} />
-                                <Label htmlFor="remember">Remember me</Label>
+                            <div className="flex items-center space-x-2">
+                                <Checkbox id="remember" checked={data.remember} onCheckedChange={(checked) => setData('remember', !!checked)} />
+                                <Label htmlFor="remember">Recordarme</Label>
                             </div>
 
-                            <Button type="submit" className="mt-4 w-full" tabIndex={4} disabled={processing}>
-                                {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                                Log in
+                            <Button type="submit" className="w-full h-11 font-bold" disabled={processing}>
+                                {processing && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
+                                Ingresar
                             </Button>
-                        </div>
+                        </form>
 
-                        <div className="text-center text-sm text-muted-foreground">
-                            Don't have an account?{' '}
-                            <TextLink href={register()} tabIndex={5}>
-                                Sign up
-                            </TextLink>
-                        </div>
-                    </>
-                )}
-            </Form>
-
-            {status && <div className="mb-4 text-center text-sm font-medium text-green-600">{status}</div>}
-        </AuthLayout>
+                        {/* <div className="mt-6 text-center text-sm">
+                            ¿No tienes una cuenta?{' '}
+                            <Link href={register()} className="font-semibold text-primary hover:underline">
+                                Regístrate aquí
+                            </Link>
+                        </div> */}
+                    </motion.div>
+                </div>
+            </div>
+        </>
     );
 }
