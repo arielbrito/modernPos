@@ -15,18 +15,6 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // 1. Ejecutar el seeder de roles y permisos
-        $this->call([
-            PermissionsSeeder::class,
-            NcfSequencesSeeder::class,
-            DefaultCustomersSeeder::class,
-            CategorySeeder::class,
-            SupplierSeeder::class,
-            ProductSeeder::class,
-            CurrencySeeder::class,
-            CashDenominationSeeder::class,
-            RegisterSeeder::class,
-        ]);
 
         // 2. Crear una tienda principal
         $mainStore = Store::firstOrCreate(
@@ -54,6 +42,20 @@ class DatabaseSeeder extends Seeder
         // Usamos una sintaxis de array asociativo para pasar datos adicionales a la tabla pivote
         $superAdmin->stores()->sync([
             $mainStore->id => ['role_id' => $superAdminRole->id]
+        ]);
+
+
+        // 1. Ejecutar el seeder de roles y permisos
+        $this->call([
+            PermissionsSeeder::class,
+            NcfSequencesSeeder::class,
+            DefaultCustomersSeeder::class,
+            CategorySeeder::class,
+            SupplierSeeder::class,
+            ProductSeeder::class,
+            CurrencySeeder::class,
+            CashDenominationSeeder::class,
+            RegisterSeeder::class,
         ]);
     }
 }
