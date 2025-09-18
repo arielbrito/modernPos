@@ -113,7 +113,7 @@ export default function SalePrint({ sale }: { sale: any }) {
     );
 
     return (
-        <div className="w-[80mm] mx-auto text-[12px] font-sans text-slate-900 print:w-[80mm]">
+        <div className="w-[80mm] mx-auto text-[12px] font-sans text-slate-900 print:w-[80mm] dark:print:text-slate-200">
             <Style />
 
             <div className="text-center mb-2">
@@ -152,10 +152,10 @@ export default function SalePrint({ sale }: { sale: any }) {
 
             <div className="grid grid-cols-2 text-[11px] mb-2">
                 <div className="space-y-0.5">
-                    <div><span className="text-slate-500">Fecha</span></div>
-                    <div><span className="text-slate-500">Método de pago</span></div>
-                    <div><span className="text-slate-500">Vendedor</span></div>
-                    <div><span className="text-slate-500">No.</span></div>
+                    <div><span className="text-slate-500 dark:text-slate-100">Fecha</span></div>
+                    <div><span className="text-slate-500 dark:text-slate-100">Método de pago</span></div>
+                    <div><span className="text-slate-500 dark:text-slate-100">Vendedor</span></div>
+                    <div><span className="text-slate-500 dark:text-slate-100">No.</span></div>
                 </div>
                 <div className="text-right space-y-0.5">
                     <div>{occurredAtStr}</div>
@@ -224,7 +224,7 @@ export default function SalePrint({ sale }: { sale: any }) {
                 )}
             </div>
 
-            <div className="mt-3 text-[10px] text-center text-slate-600">
+            <div className="mt-3 text-[10px] text-center text-slate-600 dark:text-slate-100">
                 <div>
                     Total de ítems: {itemsCount} · Cantidad total: {fmt(qtyTotal)}
                 </div>

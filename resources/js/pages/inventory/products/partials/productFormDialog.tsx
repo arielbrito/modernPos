@@ -1,9 +1,10 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useMemo, useCallback } from 'react';
-import { useForm } from '@inertiajs/react';
-import { Category, Product, Supplier } from '@/types';
+import { useForm, router } from '@inertiajs/react';
+import { Category, Product, Supplier, ProductVariant } from '@/types';
+import { slugify } from '@/lib/utils'; // <-- 1. IMPORTA LA FUNCIÓN
 
 // Componentes UI de ShadCN
 import { Button } from '@/components/ui/button';
@@ -13,11 +14,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
 import { Trash2, PlusCircle, Package, ReceiptText } from 'lucide-react';
 import InputError from '@/components/input-error';
 
 // Wayfinder para rutas
 import ProductController from '@/actions/App/Http/Controllers/Inventory/ProductController';
+// Constantes
+import { TAX_OPTIONS } from '../../../pos/libs/pos-constants';
 
 // --- TIPOS Y HELPERS ---
 
@@ -29,6 +33,7 @@ interface ProductFormDialogProps {
     productToEdit?: Product | null;
 }
 
+// Tipo para el estado del formulario de una variante, ahora con impuestos
 type VariantFormData = {
     id?: number;
     sku: string;
@@ -43,12 +48,15 @@ type VariantFormData = {
 
 type ProductFormData = {
     name: string;
+    slug: string; // <-- AÑADIR
+    type: 'simple' | 'variable'; // <-- AÑADIR
     description: string;
     product_nature: 'stockable' | 'service';
     category_id: string;
     supplier_id: string;
     unit: string;
     is_active: boolean;
+    image: File | null; // <-- CAMPO AÑADIDO
     variants: VariantFormData[];
 };
 
@@ -57,6 +65,7 @@ const attributesObjectToString = (attributes: Record<string, any> | null | undef
     return Object.entries(attributes).map(([k, v]) => `${k}:${v}`).join(', ');
 };
 
+// Nueva variante por defecto, ahora con valores de impuestos
 const newEmptyVariant = (): VariantFormData => ({
     id: undefined,
     sku: '',
@@ -68,8 +77,6 @@ const newEmptyVariant = (): VariantFormData => ({
     tax_code: 'ITBIS18',
     tax_rate: 0.18,
 });
-
-// --- SUB-COMPONENTES DE FORMULARIO PARA REUTILIZACIÓN ---
 
 const Section = ({ title, children }: { title: string, children: React.ReactNode }) => (
     <div className="space-y-2">
@@ -83,30 +90,55 @@ const Section = ({ title, children }: { title: string, children: React.ReactNode
 export function ProductFormDialog({ isOpen, setIsOpen, categories, suppliers, productToEdit }: ProductFormDialogProps) {
     const isEditing = !!productToEdit;
 
-    const { data, setData, post, patch, errors, reset, processing, clearErrors } = useForm<ProductFormData>({
+    const { data, setData, errors, reset, processing, clearErrors } = useForm<ProductFormData>({
         name: '',
+        slug: '', // <-- AÑADIR
+        type: 'simple', // <-- AÑADIR (con valor por defecto)
         description: '',
         product_nature: 'stockable',
         category_id: '',
         supplier_id: '',
         unit: 'Unidad',
         is_active: true,
+        image: null, // <-- CAMPO AÑADIDO
         variants: [newEmptyVariant()],
     });
 
     const isStockable = data.product_nature === 'stockable';
 
+    const imagePreviewUrl = useMemo(() => {
+        if (data.image) {
+            return URL.createObjectURL(data.image);
+        }
+        if (productToEdit) {
+            const variantWithImage = productToEdit.variants?.find((v: any) => v.image_url);
+            return variantWithImage?.image_url ?? null;
+        }
+        return null;
+    }, [data.image, productToEdit]);
+
+    useEffect(() => {
+        // Solo actualiza el slug automáticamente si no estamos editando
+        // o si el campo de slug está vacío por alguna razón.
+        if (!isEditing) {
+            setData('slug', slugify(data.name));
+        }
+    }, [data.name, isEditing]);
+
     useEffect(() => {
         if (isOpen && productToEdit) {
             setData({
                 name: productToEdit.name,
+                slug: productToEdit.slug, // <-- AÑADIR
+                type: productToEdit.type, // <-- AÑADIR
                 description: productToEdit.description || '',
                 product_nature: productToEdit.product_nature as 'stockable' | 'service',
                 category_id: String(productToEdit.category_id || ''),
                 supplier_id: String(productToEdit.supplier_id || ''),
                 unit: productToEdit.unit || 'Unidad',
                 is_active: productToEdit.is_active,
-                variants: productToEdit.variants.map((v: any) => ({
+                image: null,
+                variants: productToEdit.variants.map((v: ProductVariant) => ({
                     id: v.id,
                     sku: v.sku,
                     selling_price: String(v.selling_price ?? ''),
@@ -115,7 +147,7 @@ export function ProductFormDialog({ isOpen, setIsOpen, categories, suppliers, pr
                     attributes: attributesObjectToString(v.attributes),
                     is_taxable: v.is_taxable,
                     tax_code: v.tax_code || 'ITBIS18',
-                    tax_rate: v.tax_rate || 0.18,
+                    tax_rate: v.tax_rate ?? 0.18,
                 })),
             });
         } else if (!isOpen) {
@@ -130,8 +162,16 @@ export function ProductFormDialog({ isOpen, setIsOpen, categories, suppliers, pr
         ));
     }, [data.variants]);
 
-    const addVariant = () => setData('variants', [...data.variants, newEmptyVariant()]);
+    const handleTaxTypeChange = useCallback((index: number, taxCode: string) => {
+        const taxOption = TAX_OPTIONS.find(t => t.code === taxCode) || TAX_OPTIONS.find(t => t.rate === 0); // Fallback a Exento
+        if (taxOption) {
+            setData('variants', data.variants.map((variant, i) =>
+                i === index ? { ...variant, tax_code: taxOption.code, tax_rate: taxOption.rate } : variant
+            ));
+        }
+    }, [data.variants]);
 
+    const addVariant = () => setData('variants', [...data.variants, newEmptyVariant()]);
     const removeVariant = (index: number) => {
         if (data.variants.length > 1) {
             setData('variants', data.variants.filter((_, i) => i !== index));
@@ -141,12 +181,23 @@ export function ProductFormDialog({ isOpen, setIsOpen, categories, suppliers, pr
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const options = { preserveScroll: true, onSuccess: () => setIsOpen(false) };
+        const payload: any = { ...data };
+        if (!payload.image) delete payload.image;
+        if (!isEditing) delete payload.id; // No es necesario, no enviamos id al crear
+        if (isEditing) payload._method = 'put';
 
-        if (isEditing) {
-            patch(ProductController.update.url({ product: productToEdit!.id }), options);
-        } else {
-            post(ProductController.store.url(), options);
-        }
+        router.post(
+            isEditing ? ProductController.update.url({ product: productToEdit!.id! }) : ProductController.store.url(),
+            payload,
+            {
+                forceFormData: true, // 👈 clave
+                ...options,
+            },
+
+        );
+
+
+
     };
 
     return (
@@ -178,7 +229,35 @@ export function ProductFormDialog({ isOpen, setIsOpen, categories, suppliers, pr
                             )}
                             <div><Label htmlFor="unit">Unidad de Medida</Label><Select value={data.unit} onValueChange={v => setData('unit', v)}><SelectTrigger><SelectValue placeholder="Unidad" /></SelectTrigger><SelectContent>{['Unidad', 'Kg', 'g', 'L', 'm', 'cm', 'Caja', 'Paquete', 'Botella'].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent></Select><InputError message={errors.unit} /></div>
                         </div>
-                        <div><Label htmlFor="description">Descripción (Opcional)</Label><Textarea id="description" value={data.description} onChange={e => setData('description', e.target.value)} /><InputError message={errors.description} /></div>
+                        <div className="grid md:grid-cols-2 gap-4 items-start">
+                            <div>
+                                <Label htmlFor="description">Descripción (Opcional)</Label>
+                                <Textarea
+                                    id="description"
+                                    value={data.description}
+                                    onChange={e => setData('description', e.target.value)}
+                                />
+                                <InputError message={errors.description} />
+                            </div>
+
+                            {/* --- 4. AÑADIR CAMPO DE IMAGEN AL FORMULARIO (JSX) --- */}
+                            <div>
+                                <Label htmlFor="image">Imagen Principal</Label>
+                                <Input
+                                    id="image"
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => setData('image', e.target.files ? e.target.files[0] : null)}
+                                    className="pt-1.5 file:text-sm file:font-medium"
+                                />
+                                <InputError message={errors.image} />
+                            </div>
+                        </div>
+                        {imagePreviewUrl && (
+                            <div className="w-24 h-24 mt-2 rounded-lg border p-1">
+                                <img src={imagePreviewUrl} alt="Vista previa" className="w-full h-full object-cover rounded-md" />
+                            </div>
+                        )}
                     </Section>
 
                     <Section title={isStockable ? 'Variantes y Precios' : 'Precio del Servicio'}>
@@ -201,6 +280,36 @@ export function ProductFormDialog({ isOpen, setIsOpen, categories, suppliers, pr
                                         <div><Label htmlFor={`barcode_${index}`}>Código de Barras</Label><Input id={`barcode_${index}`} value={variant.barcode} onChange={e => handleVariantChange(index, 'barcode', e.target.value)} /><InputError message={errors[`variants.${index}.barcode`]} /></div>
                                     </div>
                                 )}
+
+                                {/* --- SECCIÓN DE IMPUESTOS AÑADIDA --- */}
+                                <Separator />
+                                <div className="space-y-3">
+                                    <div className="flex items-center space-x-2">
+                                        <Switch
+                                            id={`is_taxable_${index}`}
+                                            checked={variant.is_taxable}
+                                            onCheckedChange={(checked) => handleVariantChange(index, 'is_taxable', checked)}
+                                        />
+                                        <Label htmlFor={`is_taxable_${index}`}>Paga impuestos</Label>
+                                    </div>
+                                    {variant.is_taxable && (
+                                        <div className="grid md:grid-cols-2 gap-4">
+                                            <div>
+                                                <Label>Tipo de Impuesto</Label>
+                                                <Select value={variant.tax_code} onValueChange={(value) => handleTaxTypeChange(index, value)}>
+                                                    <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {TAX_OPTIONS.map(opt => <SelectItem key={opt.code} value={opt.code}>{opt.name}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div>
+                                                <Label>Tasa (%)</Label>
+                                                <Input value={(variant.tax_rate * 100).toFixed(2)} disabled readOnly />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         ))}
                         {isStockable && (
@@ -210,10 +319,10 @@ export function ProductFormDialog({ isOpen, setIsOpen, categories, suppliers, pr
                         )}
                     </Section>
 
-                    <div className="flex justify-between items-center pt-4 border-t">
+                    <div className="flex justify-between items-center pt-4 border-t sticky bottom-0 bg-background py-4">
                         <div className="flex items-center space-x-2">
                             <Switch id="is_active" checked={data.is_active} onCheckedChange={c => setData('is_active', c)} />
-                            <Label htmlFor="is_active">Producto Activo en el Catálogo</Label>
+                            <Label htmlFor="is_active">Producto Activo</Label>
                         </div>
                         <Button type="submit" disabled={processing}>
                             {processing ? 'Guardando…' : isEditing ? 'Actualizar Producto' : 'Crear Producto'}

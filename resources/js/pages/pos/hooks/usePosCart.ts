@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Product } from '@/types';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { TAX_OPTIONS } from '../libs/pos-constants';
 import { calcCartTotals } from '../libs/pos-helpers';
 import type { CartItem, CartTotals, LineMeta } from '../libs/pos-types';
@@ -31,64 +32,101 @@ export function usePosCart(): UsePosCartResult {
     /**
      * Añade un producto al carrito. Si ya existe, incrementa su cantidad.
      */
-    const addToCart = (product: Product) => {
-        const variant = (product as any)?.variants?.[0];
-        if (!variant) return;
+    const addToCart = useCallback(
+        (product: Product) => {
+            const variant = (product as any)?.variants?.[0];
+            if (!variant) return;
 
-        setItems((prev) => {
-            const existing = prev.find((i) => i.product_variant_id === variant.id);
-            if (existing) {
-                return prev.map((i) => (i.product_variant_id === variant.id ? { ...i, quantity: i.quantity + 1 } : i));
+            // --- Lógica de Stock (si aplica) ---
+            if (product.product_nature === 'stockable') {
+                const stock = variant.stock ?? 0;
+                const itemInCart = items.find((i) => i.product_variant_id === variant.id);
+                const quantityInCart = itemInCart?.quantity ?? 0;
+
+                if (quantityInCart >= stock) {
+                    toast.error('Producto Agotado', { description: `No hay más unidades de "${product.name}".` });
+                    return;
+                }
+
+                if (stock > 0 && stock <= 5 && quantityInCart === stock - 1) {
+                    toast.warning('Última unidad en stock', { description: `Añadiste la última unidad de "${product.name}".` });
+                }
             }
-            return [
-                ...prev,
-                {
-                    product_variant_id: variant.id,
-                    name: product.name,
-                    sku: variant.sku,
-                    quantity: 1,
-                    price: Number(variant.selling_price) || 0,
-                },
-            ];
-        });
 
-        // Inicializa los metadatos de la línea (impuestos) si no existen
-        setLineMeta((prev) => {
-            if (prev[variant.id]) return prev; // No sobreescribir si ya existe
+            // --- Lógica para añadir/actualizar el item en el carrito ---
+            setItems((prev) => {
+                const existing = prev.find((i) => i.product_variant_id === variant.id);
+                if (existing) {
+                    return prev.map((i) => (i.product_variant_id === variant.id ? { ...i, quantity: i.quantity + 1 } : i));
+                }
+                return [
+                    ...prev,
+                    {
+                        product_variant_id: variant.id,
+                        name: product.name,
+                        sku: variant.sku,
+                        quantity: 1,
+                        price: Number(variant.selling_price) || 0,
+                    },
+                ];
+            });
 
-            const taxOption =
-                (variant.is_taxable && TAX_OPTIONS.find((t) => t.code === variant.tax_code)) ||
-                (variant.is_taxable ? TAX_OPTIONS[0] : TAX_OPTIONS[1]);
+            // --- Lógica para establecer los impuestos por defecto (solo si el item es nuevo) ---
+            setLineMeta((prev) => {
+                if (prev[variant.id]) return prev; // No sobreescribir si ya existe
 
-            return {
-                ...prev,
-                [variant.id]: {
-                    tax_code: taxOption.code,
-                    tax_name: taxOption.name,
-                    tax_rate: taxOption.rate,
-                },
-            };
-        });
-    };
+                const defaultTaxable = TAX_OPTIONS.find((t) => t.code === 'ITBIS18') || TAX_OPTIONS[0];
+                const defaultExempt = TAX_OPTIONS.find((t) => t.code === 'EXENTO') || TAX_OPTIONS[1];
+
+                if (!variant.is_taxable) {
+                    return {
+                        ...prev,
+                        [variant.id]: {
+                            tax_code: defaultExempt.code,
+                            tax_name: defaultExempt.name,
+                            tax_rate: defaultExempt.rate,
+                        },
+                    };
+                }
+
+                const taxInfo = TAX_OPTIONS.find((t) => t.code === variant.tax_code);
+                return {
+                    ...prev,
+                    [variant.id]: {
+                        tax_code: variant.tax_code || defaultTaxable.code,
+                        tax_name: taxInfo?.name || defaultTaxable.name,
+                        tax_rate: variant.tax_rate ?? defaultTaxable.rate,
+                        discount_amount: null,
+                        discount_percent: null,
+                    },
+                };
+            });
+        },
+        [items],
+    );
 
     /**
      * Actualiza la cantidad de un producto en el carrito.
      * Si la cantidad es 0 o menos, elimina el producto.
      */
-    const updateQuantity = (variantId: number, newQuantity: number) => {
-        setItems((prev) => {
+    const updateQuantity = useCallback(
+        (variantId: number, newQuantity: number) => {
             if (newQuantity <= 0) {
-                // Limpia los metadatos de la línea al eliminar el producto
-                setLineMeta((metaPrev) => {
-                    const next = { ...metaPrev };
+                // Primero, removemos el item del carrito
+                setItems((prev) => prev.filter((i) => i.product_variant_id !== variantId));
+                // Luego, removemos sus metadatos
+                setLineMeta((prev) => {
+                    const next = { ...prev };
                     delete next[variantId];
                     return next;
                 });
-                return prev.filter((i) => i.product_variant_id !== variantId);
+            } else {
+                // Si solo actualizamos la cantidad, solo se llama a `setItems`
+                setItems((prev) => prev.map((i) => (i.product_variant_id === variantId ? { ...i, quantity: newQuantity } : i)));
             }
-            return prev.map((i) => (i.product_variant_id === variantId ? { ...i, quantity: newQuantity } : i));
-        });
-    };
+        },
+        [setItems, setLineMeta],
+    ); // useCallback optimiza la función
 
     /**
      * Actualiza los metadatos (descuentos, impuestos) de una línea del carrito.

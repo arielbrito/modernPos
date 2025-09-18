@@ -103,6 +103,21 @@ class ProductService
                     ]
                 );
             }
+            if ($request->hasFile('image')) {
+                // Asumimos que la imagen principal corresponde a la primera variante
+                $variantToUpdate = $product->variants()->first();
+
+                if ($variantToUpdate) {
+                    // Borrar la imagen antigua si existe
+                    if ($variantToUpdate->image_path) {
+                        Storage::disk('public')->delete($variantToUpdate->image_path);
+                    }
+
+                    // Guardar la nueva imagen y actualizar la ruta
+                    $imagePath = $request->file('image')->store('images/products', 'public');
+                    $variantToUpdate->update(['image_path' => $imagePath]);
+                }
+            }
         });
 
         return $product->fresh('variants');

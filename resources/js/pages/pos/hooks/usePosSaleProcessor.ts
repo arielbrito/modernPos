@@ -3,7 +3,7 @@ import SaleController from '@/actions/App/Http/Controllers/Sales/SaleController'
 import { router } from '@inertiajs/react';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
-import { compactLineMeta, isTruthy, onlyDigits } from '../libs/pos-helpers';
+import { isTruthy, onlyDigits } from '../libs/pos-helpers';
 import { PosContext, PosCustomer, SalePayload } from '../libs/pos-types';
 import { type UIPayment } from '../partials/paymentDialog';
 import { UsePosCartResult } from './usePosCart';
@@ -84,12 +84,23 @@ function buildSalePayload({
         currency_code: 'DOP',
         ncf_type: ncfInfo.type,
         occurred_at: new Date().toISOString(),
-        lines: cart.items.map((ci) => ({
-            variant_id: ci.product_variant_id,
-            qty: ci.quantity,
-            unit_price: ci.price,
-            ...compactLineMeta(cart.lineMeta[ci.product_variant_id]),
-        })),
+        lines: cart.items.map((item) => {
+            const meta = cart.lineMeta[item.product_variant_id] || {};
+            return {
+                variant_id: item.product_variant_id,
+                qty: item.quantity,
+                unit_price: item.price,
+
+                // Añadimos explícitamente los campos de impuestos
+                // Si no hay `tax_code`, ambos serán undefined y no se enviarán.
+                tax_code: meta.tax_code,
+                tax_rate: meta.tax_rate,
+
+                // Añadimos descuentos solo si tienen un valor, para no enviar campos vacíos
+                ...(meta.discount_amount && { discount_amount: meta.discount_amount }),
+                ...(meta.discount_percent && { discount_percent: meta.discount_percent }),
+            };
+        }),
         payments: payments.map((p) => ({
             method: p.method,
             amount: Number(p.amount),

@@ -59,10 +59,12 @@ export default function ProductIndexPage({ products, categories, suppliers, stor
     // --- 2. ESTADO LOCAL DE LA UI ---
     const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 
-    const getStockLevel = (p: Product) => p.variants.reduce((sum, v) => sum + (v.stock ?? 0), 0);
-    const lowStockCount = useMemo(() => {
-        return products.data.filter(p => getStockLevel(p) < 10).length;
-    }, [products.data]);
+    const getStockLevel = (p: Product) => Number(p.total_stock ?? 0);
+    // const lowStockCount = useMemo(() => {
+    //     return products.data.filter(p => getStockLevel(p) < 10).length;
+    // }, [products.data]);
+
+
 
     // --- 3. RENDERIZADO DECLARATIVO ---
     return (
@@ -70,7 +72,7 @@ export default function ProductIndexPage({ products, categories, suppliers, stor
             <Head title="Productos" />
 
             <div className="max-w-7xl mx-auto space-y-6 py-10 px-4 sm:px-6 lg:px-8">
-                <StatsCards stats={storeStats} categoriesCount={categories.length} lowStockCount={lowStockCount} />
+                <StatsCards stats={storeStats} categoriesCount={categories.length} lowStockCount={storeStats.current.low_stock_count} />
 
                 <Card>
                     <CardHeader>
@@ -118,7 +120,8 @@ export default function ProductIndexPage({ products, categories, suppliers, stor
                             <span className="text-sm text-muted-foreground">
                                 Mostrando {products.from} a {products.to} de {products.total} resultados
                             </span>
-                            <Paginator links={products.links} preserveScroll />
+                            {/* <Paginator links={products.links} preserveScroll /> */}
+                            <Pagination links={products.links} />
                         </div>
                     )}
                 </Card>

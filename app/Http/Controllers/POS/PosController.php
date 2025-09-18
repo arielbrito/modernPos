@@ -22,12 +22,41 @@ class PosController extends Controller
 
     public function searchProducts(Request $request)
     {
+        // 1. OBTENER LA TIENDA ACTIVA: El stock depende de la tienda.
+        $storeId = (int) session('active_store_id');
+
+        // Si no hay tienda activa, no podemos calcular el stock.
+        if (!$storeId) {
+            // Devolvemos un array vacío para no romper el frontend.
+            return response()->json([]);
+        }
+
         $term = $request->query('term', '');
-        $limit = (int)$request->query('limit', 10);
+        $limit = (int) $request->query('limit', 12); // Aumenté un poco el límite para llenar mejor la cuadrícula.
 
         $q = Product::query()
-            ->select('id', 'name')
-            ->with(['variants' => fn($v) => $v->select('id', 'product_id', 'sku', 'barcode', 'selling_price', 'image_path', 'is_taxable', 'tax_code', 'tax_rate')]);
+            // 2. AÑADIR `product_nature`: Esencial para distinguir servicios.
+            ->select('id', 'name', 'product_nature')
+            ->with(['variants' => function ($v) use ($storeId) {
+                $v->select(
+                    'id',
+                    'product_id',
+                    'sku',
+                    'barcode',
+                    'selling_price',
+                    'image_path',
+                    'is_taxable',
+                    'tax_code',
+                    'tax_rate'
+                )
+                    // 3. AÑADIR CÁLCULO DE STOCK: La parte más importante.
+                    // Esto añade la propiedad `stock` a cada variante de forma ultra eficiente.
+                    ->withSum([
+                        'inventory as stock' => function ($iq) use ($storeId) {
+                            $iq->where('store_id', $storeId);
+                        }
+                    ], 'quantity');
+            }]);
 
         if ($term !== '' && mb_strlen($term) >= 2) {
             $q->where(function ($qq) use ($term) {
@@ -40,7 +69,7 @@ class PosController extends Controller
                     );
             });
         } else {
-            $q->latest('id'); // o ->orderBy('name')
+            $q->latest('id');
         }
 
         return response()->json($q->limit($limit)->get());

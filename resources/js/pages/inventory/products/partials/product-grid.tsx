@@ -25,7 +25,7 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('es-DO', { style
 
 export function ProductGrid({ products, selection, onEdit, onDelete }: ProductGridProps) {
     // Calcula el stock total sumando el de todas las variantes
-    const getStockLevel = (p: Product) => p.variants.reduce((sum, v) => sum + (v.stock ?? 0), 0);
+    const getStockLevel = (p: Product) => Number(p.total_stock ?? 0);
 
     return (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

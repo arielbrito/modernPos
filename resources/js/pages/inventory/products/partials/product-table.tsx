@@ -36,7 +36,7 @@ const SortableHeader = ({ children, field, onSort, sortField, sortDirection }: a
 
 export function ProductTable({ products, selection, onEdit, onDelete, onSort, sortField, sortDirection }: ProductTableProps) {
     const formatCurrency = (value: number) => new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP' }).format(value);
-    const getStockLevel = (p: Product) => p.variants.reduce((sum, v) => sum + (v.stock ?? 0), 0);
+    const getStockLevel = (p: Product) => Number(p.total_stock ?? 0);
 
     return (
         <div className="w-full overflow-x-auto border rounded-lg">

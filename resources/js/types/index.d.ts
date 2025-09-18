@@ -107,6 +107,7 @@ export interface Product {
     type: 'simple' | 'variable';
     unit: string;
     is_active: boolean;
+    total_stock: string;
 
     // Cambiado de 'any' a 'string' para mayor seguridad de tipos
     created_at: string;

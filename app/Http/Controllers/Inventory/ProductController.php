@@ -46,6 +46,20 @@ class ProductController extends Controller
         // $storeId      = $request->input('store_id'); // opcional
         $threshold    = (int) $request->input('low_stock_threshold', 10);
 
+        $lowStockThreshold = 10;
+
+        $lowStockCount = Product::query()
+            ->where('product_nature', 'stockable')
+            ->where('is_active', true)
+            ->where(function ($query) use ($storeId, $lowStockThreshold) {
+                $query->selectRaw('COALESCE(SUM(i.quantity), 0)')
+                    ->from('inventory as i')
+                    ->join('product_variants as pv', 'pv.id', '=', 'i.product_variant_id')
+                    ->whereColumn('pv.product_id', 'products.id')
+                    ->when($storeId, fn($q) => $q->where('i.store_id', $storeId));
+            }, '<', $lowStockThreshold)
+            ->count();
+
         $sortField    = in_array($request->input('sort_field'), ['name', 'price', 'created_at', 'updated_at'], true)
             ? $request->input('sort_field') : 'name';
         $sortDir      = $request->input('sort_direction') === 'desc' ? 'desc' : 'asc';
@@ -156,6 +170,7 @@ class ProductController extends Controller
                     'products'         => $productsCountStore,
                     'active_products'  => $activeProductsCountStore,
                     'variants'         => $variantsCountStore,
+                    'low_stock_count' => $lowStockCount,
                 ],
             ],
             'filters'    => $request->only([
