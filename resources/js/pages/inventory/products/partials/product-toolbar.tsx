@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Search, Filter, List, Grid3X3, Plus, Trash2, X } from 'lucide-react';
 import { useProductFilters } from '../hooks/useProductFilters'; // Importamos los tipos
 import { useProductSelection } from '../hooks/useProductSelection';
+import { FiltersSheetContent } from './FiltersSheetContent';
+import { Category, Supplier } from '@/types';
 
 interface ProductsToolbarProps {
     filters: ReturnType<typeof useProductFilters>;
@@ -13,9 +16,12 @@ interface ProductsToolbarProps {
     viewMode: 'table' | 'grid';
     onViewModeChange: (mode: 'table' | 'grid') => void;
     onAddNew: () => void;
+    categories: Pick<Category, 'id' | 'name'>[];
+    suppliers: Pick<Supplier, 'id' | 'name'>[];
 }
 
-export function ProductsToolbar({ filters, selection, viewMode, onViewModeChange, onAddNew }: ProductsToolbarProps) {
+export function ProductsToolbar({ filters, selection, viewMode, onViewModeChange, onAddNew, categories, suppliers }: ProductsToolbarProps) {
+    const [isSheetOpen, setIsSheetOpen] = useState(false);
     return (
         <div className="flex flex-col gap-4">
             <div className="flex items-center gap-4">
@@ -29,14 +35,25 @@ export function ProductsToolbar({ filters, selection, viewMode, onViewModeChange
                     />
                 </div>
 
-                {/* De momento, el botón de filtros avanzados lo dejaremos como placeholder */}
-                <Button variant="outline" className="shrink-0" disabled>
-                    <Filter className="mr-2 h-4 w-4" />
-                    Filtros
-                    {filters.activeFilterCount > 0 && (
-                        <Badge variant="secondary" className="ml-2">{filters.activeFilterCount}</Badge>
-                    )}
-                </Button>
+                <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+                    <SheetTrigger asChild>
+                        <Button variant="outline" className="shrink-0">
+                            <Filter className="mr-2 h-4 w-4" />
+                            Filtros
+                            {filters.activeFilterCount > 0 && (
+                                <Badge variant="secondary" className="ml-2">{filters.activeFilterCount}</Badge>
+                            )}
+                        </Button>
+                    </SheetTrigger>
+                    <SheetContent>
+                        <FiltersSheetContent
+                            filters={filters}
+                            categories={categories}
+                            suppliers={suppliers}
+                            onApply={() => setIsSheetOpen(false)}
+                        />
+                    </SheetContent>
+                </Sheet>
 
                 {/* Selectores de Vista */}
                 <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">

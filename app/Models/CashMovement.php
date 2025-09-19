@@ -9,7 +9,8 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class CashMovement extends Model
 {
-    public $timestamps = false;
+
+    const UPDATED_AT = null;
     protected $fillable = [
         'shift_id',
         'direction',
@@ -29,7 +30,7 @@ class CashMovement extends Model
     {
         return $this->belongsTo(CashShift::class);
     }
-    public function creator(): BelongsTo
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
     }

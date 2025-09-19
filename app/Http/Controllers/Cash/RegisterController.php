@@ -202,247 +202,86 @@ class RegisterController extends Controller
     {
         $this->authorize('view', $register);
 
-        // 1) Moneda activa
-        $ccy = strtoupper((string) $request->query('ccy', 'DOP'));
+        $activeCurrency = strtoupper((string) $request->query('ccy', 'DOP'));
+        $shift = $register->openShift(); // Usando el helper del modelo Register
 
-        // 2) Monedas disponibles
-        $currencies = CashDenomination::query()
-            ->where('active', true)
-            ->pluck('currency_code')
-            ->unique()
-            ->values();
-
-        if ($currencies->isEmpty()) {
-            $currencies = collect(['DOP']);
+        // --- CASO 1: No hay turno abierto ---
+        if (!$shift) {
+            return Inertia::render('cash/cashbook/show', [
+                'register' => $register->only('id', 'name'),
+                'shift' => null,
+                'summary' => ['opening' => 0, 'income' => 0, 'expense' => 0, 'expense_visible' => 0, 'cash_in_hand' => 0, 'closing' => 0],
+                'incomes' => [],
+                'expenses' => [],
+                'currencies' => CashDenomination::getAvailableCurrencies(), // Usando helper del modelo
+                'activeCurrency' => $activeCurrency,
+                'flow' => ['payments_by_method' => [], 'cash_in_active_currency' => 0, 'non_cash_in_sale_ccy' => 0],
+                'can' => ['open' => Gate::allows('open', [CashShift::class, $register]), 'move' => false, 'close' => false],
+            ]);
         }
-        if (! $currencies->contains($ccy)) {
-            $ccy = $currencies->first();
-        }
 
-        // 3) Turno abierto
-        $shift = CashShift::query()
-            ->where('register_id', $register->id)
-            ->where('status', 'open')
-            ->with(['openedBy:id,name'])
-            ->latest('opened_at')
+        // --- CASO 2: Hay un turno abierto ---
+
+        // 1. OBTENER ESTADÍSTICAS PRINCIPALES DE FORMA EFICIENTE
+        $stats = DB::table('cash_movements')
+            ->where('shift_id', $shift->id)
+            ->where('currency_code', $activeCurrency)
+            ->selectRaw("
+                SUM(CASE WHEN direction = 'in' THEN amount ELSE 0 END) as income,
+                SUM(CASE WHEN direction = 'out' THEN amount ELSE 0 END) as expense_total,
+                SUM(CASE WHEN direction = 'out' AND reason <> 'change' THEN amount ELSE 0 END) as expense_visible
+            ")
             ->first();
 
-        // ===== Estimado multi-moneda para modales =====
-        $expectedByCurrency = [];
-        if ($shift) {
-            $openingByCcy = CashCount::where('shift_id', $shift->id)
-                ->where('type', 'opening')
-                ->selectRaw('currency_code, SUM(total_counted) as t')
-                ->groupBy('currency_code')
-                ->pluck('t', 'currency_code');
+        $opening = (float) CashCount::where('shift_id', $shift->id)
+            ->where('type', 'opening')
+            ->where('currency_code', $activeCurrency)
+            ->sum('total_counted');
 
-            $insByCcy = CashMovement::where('shift_id', $shift->id)
-                ->where('direction', 'in')
-                ->selectRaw('currency_code, SUM(amount) as t')
-                ->groupBy('currency_code')
-                ->pluck('t', 'currency_code');
-
-            $outsByCcy = CashMovement::where('shift_id', $shift->id)
-                ->where('direction', 'out')
-                ->where(function ($q) {
-                    $q->whereNull('reason')->orWhere('reason', '<>', 'change');
-                })
-                ->selectRaw('currency_code, SUM(amount) as t')
-                ->groupBy('currency_code')
-                ->pluck('t', 'currency_code');
-
-
-            $ccys = collect([$openingByCcy, $insByCcy, $outsByCcy])
-                ->flatMap(fn($p) => $p->keys())
-                ->unique();
-
-            foreach ($ccys as $code) {
-                $expectedByCurrency[$code] =
-                    (float) ($openingByCcy[$code] ?? 0) +
-                    (float) ($insByCcy[$code] ?? 0) -
-                    (float) ($outsByCcy[$code] ?? 0);
-            }
-        }
-
-        // 4) Totales, tablas y agregados por método
-        $opening = 0.0;
-        $income = 0.0;
-        $expense = 0.0;            // incluye change (referencia)
-        $expenseVisible = 0.0;     // excluye change (para UI y cierre)
-        $incomes = collect();
-        $expenses = collect();
-
-        // Agregados por método
-        $paymentsAgg       = collect(); // rows agrupados sp.method / sp.currency_code
-        $cashInActiveCcy   = 0.0;       // efectivo en moneda activa
-        $othersInSaleCcy   = 0.0;       // no-efectivo convertido a moneda de la venta
-        $payByMethod       = [];        // breakdown en moneda activa {cash: x, card: y,...}
-        $incomeNonCash     = 0.0;       // suma no-efectivo en moneda activa (si aplica filtro)
-
-        if ($shift) {
-            // --- Pagos agrupados por método/moneda del turno ---
-            $paymentsAgg = DB::table('sale_payments as sp')
-                ->join('sales as s', 's.id', '=', 'sp.sale_id')
-                ->where('s.shift_id', $shift->id)
-                ->selectRaw("
-                sp.method,
-                sp.currency_code,
-                COUNT(*)::int as count,
-                COALESCE(SUM(sp.amount),0)::numeric(14,2) as amount,
-                COALESCE(SUM(
-                    CASE
-                        WHEN sp.currency_code = s.currency_code
-                            THEN sp.amount
-                        ELSE sp.amount * COALESCE(sp.fx_rate_to_sale, 0)
-                    END
-                ),0)::numeric(14,2) as amount_in_sale_ccy
-            ")
-                ->groupBy('sp.method', 'sp.currency_code')
-                ->orderBy('sp.method')
-                ->orderBy('sp.currency_code')
-                ->get();
-
-            $cashInActiveCcy = (float) $paymentsAgg
-                ->where('method', 'cash')
-                ->where('currency_code', $ccy)
-                ->sum('amount');
-
-            $othersInSaleCcy = (float) $paymentsAgg
-                ->reject(fn($r) => $r->method === 'cash')
-                ->sum('amount_in_sale_ccy');
-
-            // --- Movimientos de caja (por moneda activa) ---
-            $opening = (float) CashCount::query()
-                ->where('shift_id', $shift->id)
-                ->where('type', 'opening')
-                ->where('currency_code', $ccy)
-                ->sum('total_counted');
-
-            // Ingresos efectivos (incluye ventas cash + ingresos manuales)
-            $income = (float) CashMovement::query()
-                ->where('shift_id', $shift->id)
-                ->where('direction', 'in')
-                ->where('currency_code', $ccy)
-                ->sum('amount');
-
-            // Egresos totales (con change) - para referencia
-            $expense = (float) CashMovement::query()
-                ->where('shift_id', $shift->id)
-                ->where('direction', 'out')
-                ->where('currency_code', $ccy)
-                ->sum('amount');
-
-            // Egresos visibles (excluye devueltas)
-            $expenseVisible = (float) CashMovement::query()
-                ->where('shift_id', $shift->id)
-                ->where('direction', 'out')
-                ->where('currency_code', $ccy)
-                ->where(function ($q) {
-                    $q->whereNull('reason')->orWhere('reason', '!=', 'change');
-                })
-                ->sum('amount');
-
-            // Tabla de Ingresos enriquecida con método/moneda/número de venta
-            $crm = (new CashMovement())->getTable();
-            $incomes = CashMovement::query()
-                ->from("$crm as crm")
-                ->leftJoin('sale_payments as sp', 'sp.id', '=', DB::raw("(crm.meta->>'payment_id')::int"))
-                ->leftJoin('sales as s', 's.id', '=', 'sp.sale_id')
-                ->where('crm.shift_id', $shift->id)
-                ->where('crm.direction', 'in')
-                ->where('crm.currency_code', $ccy)
-                ->latest('crm.created_at')
-                ->limit(300)
-                ->get([
-                    'crm.id',
-                    'crm.created_at',
-                    'crm.direction',
-                    'crm.amount',
-                    'crm.reason',
-                    'crm.reference',
-                    DB::raw('sp.method as pay_method'),
-                    DB::raw('sp.currency_code as pay_currency'),
-                    DB::raw('s.number as sale_number'),
-                ]);
-
-            // Tabla de Egresos (sin cambio)
-            $expenses = CashMovement::query()
-                ->where('shift_id', $shift->id)
-                ->where('direction', 'out')
-                ->where('currency_code', $ccy)
-                ->where(function ($q) {
-                    $q->whereNull('reason')->orWhere('reason', '!=', 'change');
-                })
-                ->latest('created_at')
-                ->limit(300)
-                ->get(['id', 'created_at', 'direction', 'amount', 'reason', 'reference']);
-
-            // Breakdown por método en moneda activa (para chips)
-            $payByMethod = SalePayment::query()
-                ->join('sales', 'sale_payments.sale_id', '=', 'sales.id')
-                ->where('sales.shift_id', $shift->id)
-                ->where('sale_payments.currency_code', $ccy)
-                ->selectRaw('sale_payments.method, SUM(sale_payments.amount) as t')
-                ->groupBy('sale_payments.method')
-                ->pluck('t', 'sale_payments.method')
-                ->toArray();
-
-            $incomeNonCash = (float) collect($payByMethod)
-                ->filter(fn($v, $k) => $k !== 'cash')
-                ->sum();
-        }
-
-        // 5) EFECTIVO EN MANO / CIERRE (solo efectivo, sin 'change')
+        $income = (float) $stats->income;
+        $expenseVisible = (float) $stats->expense_visible;
         $cashInHand = $opening + $income - $expenseVisible;
-        $closing    = $cashInHand;
 
-        // 6) Denominaciones
-        $denoms = CashDenomination::query()
-            ->where('active', true)
-            ->orderByDesc('value')
-            ->get(['id', 'value', 'kind', 'currency_code']);
+        // 2. OBTENER DATOS DETALLADOS
+        $movements = $shift->movements()
+            ->where('currency_code', $activeCurrency)
+            ->with('user:id,name', 'source') // Eager loading para optimizar
+            ->latest()
+            ->get();
 
+        $incomes = $movements->where('direction', 'in')->values();
+        $expenses = $movements->where('direction', 'out')->where('reason', '!=', 'change')->values();
+
+        $paymentsAgg = $shift->getPaymentSummary(); // Usando el helper del modelo CashShift
+        $cashInActiveCcy = (float) $paymentsAgg->where('method', 'cash')->where('currency_code', $activeCurrency)->sum('amount');
+        $othersInSaleCcy = (float) $paymentsAgg->where('method', '!=', 'cash')->sum('amount_in_sale_ccy');
+
+        // 3. ENVIAR RESPUESTA A INERTIA
         return Inertia::render('cash/cashbook/show', [
-            'register' => ['id' => $register->id, 'name' => $register->name],
-
-            'shift' => $shift ? [
-                'id'            => $shift->id,
-                'status'        => $shift->status,
-                'opened_at'     => $shift->opened_at,
-                'opened_by'     => $shift->openedBy ? ['id' => $shift->openedBy->id, 'name' => $shift->openedBy->name] : null,
-                'currency_code' => $ccy,
-            ] : null,
-
+            'register' => $register->only('id', 'name'),
+            'shift' => $shift->only('id', 'status', 'opened_at') + ['opened_by' => $shift->openedBy?->only('id', 'name')],
             'summary' => [
-                'opening'         => round($opening, 2),
-                'income'          => round($income, 2),           // efectivo entrado
-                'expense'         => round($expense, 2),          // con change (referencia)
-                'expense_visible' => round($expenseVisible, 2),   // **para UI** (sin change)
-                'cash_in_hand'    => round($cashInHand, 2),       // efectivo real en caja
-                'closing'         => round($closing, 2),
+                'opening' => round($opening, 2),
+                'income' => round($income, 2),
+                'expense' => round((float) $stats->expense_total, 2),
+                'expense_visible' => round($expenseVisible, 2),
+                'cash_in_hand' => round($cashInHand, 2),
+                'closing' => round($cashInHand, 2),
             ],
-
-            'incomes'        => $incomes,
-            'expenses'       => $expenses,
-            'denominations'  => $denoms,
-            'currencies'     => $currencies,
-            'activeCurrency' => $ccy,
-
-            // Agregados para tarjetas/chips de método de pago
+            'incomes' => $incomes,
+            'expenses' => $expenses,
+            'denominations' => CashDenomination::where('active', true)->orderByDesc('value')->get(['id', 'value', 'kind', 'currency_code']),
+            'currencies' => CashDenomination::getAvailableCurrencies(),
+            'activeCurrency' => $activeCurrency,
             'flow' => [
-                'payments_by_method'      => $paymentsAgg,
+                'payments_by_method' => $paymentsAgg,
                 'cash_in_active_currency' => round($cashInActiveCcy, 2),
-                'non_cash_in_sale_ccy'    => round($othersInSaleCcy, 2),
+                'non_cash_in_sale_ccy' => round($othersInSaleCcy, 2),
             ],
-            'income_breakdown' => $payByMethod,            // { cash: 17896.90, card: 1151.00, ... }
-            'income_non_cash'  => round($incomeNonCash, 2),
-
-            'expected_by_currency' => $expectedByCurrency,
-
             'can' => [
-                'open'  => Gate::allows('open',  [CashShift::class, $register]),
-                'move'  => $shift ? Gate::allows('operate', $shift) : false,
-                'close' => $shift ? Gate::allows('close',   $shift) : false,
+                'open' => Gate::allows('open', [CashShift::class, $register]),
+                'move' => Gate::allows('operate', $shift),
+                'close' => Gate::allows('close', $shift),
             ],
         ]);
     }
@@ -489,61 +328,25 @@ class RegisterController extends Controller
                 ->with('error', 'El turno no está abierto.');
         }
 
+        // --- LÓGICA COMPLEJA AHORA EN UNA SOLA LÍNEA ---
+        $expected = $shift->getExpectedTotals();
+
         $denoms = CashDenomination::query()
             ->where('active', true)
             ->orderBy('currency_code')
-            ->orderByDesc('kind')
             ->orderByDesc('value')
             ->get(['id', 'value', 'kind', 'currency_code']);
 
-        $opening = CashCount::where('shift_id', $shift->id)
-            ->where('type', 'opening')
-            ->selectRaw('currency_code, SUM(total_counted) t')
-            ->groupBy('currency_code')
-            ->pluck('t', 'currency_code');
-
-        $ins = CashMovement::where('shift_id', $shift->id)
-            ->where('direction', 'in')
-            ->selectRaw('currency_code, SUM(amount) t')
-            ->groupBy('currency_code')
-            ->pluck('t', 'currency_code');
-
-        // ⬇️ EXCLUIR reason='change'
-        $outs = CashMovement::where('shift_id', $shift->id)
-            ->where('direction', 'out')
-            ->where(function ($q) {
-                $q->whereNull('reason')->orWhere('reason', '<>', 'change');
-            })
-            ->selectRaw('currency_code, SUM(amount) t')
-            ->groupBy('currency_code')
-            ->pluck('t', 'currency_code');
-
-        $ccys = collect([$opening, $ins, $outs])
-            ->flatMap(fn($p) => $p->keys())
-            ->unique()
-            ->values();
-
-        $expected = [];
-        foreach ($ccys as $ccy) {
-            $expected[$ccy] = (float) ($opening[$ccy] ?? 0)
-                + (float) ($ins[$ccy] ?? 0)
-                - (float) ($outs[$ccy] ?? 0);
-        }
-
-        $activeCurrency = strtoupper((string) $request->query('ccy', $ccys->first() ?? 'DOP'));
+        $activeCurrency = strtoupper((string) $request->query(
+            'ccy',
+            $expected->keys()->first() ?? 'DOP'
+        ));
 
         return Inertia::render('cash/cashbook/close-shift', [
-            'shift'          => [
-                'id'          => $shift->id,
-                'register_id' => $shift->register_id,
-                'opened_at'   => $shift->opened_at,
-            ],
-            'register'       => [
-                'id'   => $shift->register->id,
-                'name' => $shift->register->name,
-            ],
-            'denominations'  => $denoms,
-            'expected'       => $expected,
+            'shift' => $shift->only('id', 'register_id', 'opened_at'),
+            'register' => $shift->register->only('id', 'name'),
+            'denominations' => $denoms,
+            'expected' => $expected,
             'activeCurrency' => $activeCurrency,
         ]);
     }

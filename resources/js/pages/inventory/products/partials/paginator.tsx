@@ -10,64 +10,58 @@ interface PaginationLink {
     active: boolean;
 }
 
-// Hacemos que la prop `preserveScroll` sea opcional
 interface PaginatorProps {
     links: PaginationLink[];
     className?: string;
-    preserveScroll?: boolean;
+    preserveState?: boolean; // Prop para controlar el estado
 }
 
-export function Paginator({ links, className, preserveScroll = false }: PaginatorProps) {
-    // Si no hay links o solo hay "prev" y "next", no renderizar nada.
+export function Paginator({ links, className, preserveState = true }: PaginatorProps) {
     if (!links || links.length <= 3) {
         return null;
     }
 
+    // Usamos una función para no repetir el <Link>
+    const renderLink = (link: PaginationLink, children: React.ReactNode) => (
+        <Link
+            href={link.url || '#'}
+            preserveState={preserveState} // <-- Clave para mantener los filtros
+            preserveScroll // <-- Clave para no saltar al tope de la página
+            className={!link.url ? 'pointer-events-none' : ''}
+        >
+            {children}
+        </Link>
+    );
+
     return (
         <nav className={cn('flex items-center justify-center gap-1', className)}>
             {links.map((link, index) => {
-                // El label viene con HTML entities (ej: &laquo;), usamos dangerouslySetInnerHTML
-                const label = link.label;
+                // El `label` de Laravel a veces contiene HTML, lo limpiamos para usar íconos
+                const isPrev = index === 0;
+                const isNext = index === links.length - 1;
+                const isEllipsis = link.label.includes('...');
 
-                // Botón "Anterior"
-                if (index === 0) {
-                    return (
-                        <Button key="prev" asChild variant="outline" size="icon" disabled={!link.url}>
-                            <Link href={link.url || '#'} preserveScroll={preserveScroll}>
-                                <span className="sr-only">Anterior</span>
-                                <ChevronLeft className="h-4 w-4" />
-                            </Link>
-                        </Button>
-                    );
-                }
-
-                // Botón "Siguiente"
-                if (index === links.length - 1) {
-                    return (
-                        <Button key="next" asChild variant="outline" size="icon" disabled={!link.url}>
-                            <Link href={link.url || '#'} preserveScroll={preserveScroll}>
-                                <span className="sr-only">Siguiente</span>
-                                <ChevronRight className="h-4 w-4" />
-                            </Link>
-                        </Button>
-                    );
-                }
-
-                // Botones de número de página
-                // No renderizar si es un separador "..."
-                if (label === '...') {
-                    return <span key={`ellipsis-${index}`} className="px-2 py-1 text-muted-foreground">...</span>
+                if (isEllipsis) {
+                    return <span key={`ellipsis-${index}`} className="px-3 py-1 text-muted-foreground">...</span>;
                 }
 
                 return (
                     <Button
-                        key={label}
+                        key={link.label}
                         asChild
                         variant={link.active ? 'default' : 'outline'}
                         size="icon"
                         disabled={!link.url}
+                        aria-label={isPrev ? 'Página anterior' : isNext ? 'Página siguiente' : `Página ${link.label}`}
                     >
-                        <Link href={link.url || '#'} preserveScroll={preserveScroll}>{label}</Link>
+                        {renderLink(
+                            link,
+                            isPrev
+                                ? <ChevronLeft className="h-4 w-4" />
+                                : isNext
+                                    ? <ChevronRight className="h-4 w-4" />
+                                    : link.label
+                        )}
                     </Button>
                 );
             })}

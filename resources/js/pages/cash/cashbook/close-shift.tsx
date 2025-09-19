@@ -1,44 +1,29 @@
-import * as React from "react";
-import AppLayout from "@/layouts/app-layout";
-import { router } from "@inertiajs/react";
-import { CloseShiftPage } from "./partials/close-shift-page";
-import RegisterController from "@/actions/App/Http/Controllers/Cash/RegisterController";
-// import CashShiftController from "@/actions/App/Http/Controllers/Cash/CashShiftController";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import React from 'react';
+import { router } from '@inertiajs/react';
+import AppLayout from '@/layouts/app-layout';
+import { CashCountPage } from './partials/CashCountPage'; // <-- Nuestro nuevo componente
+import RegisterController from '@/actions/App/Http/Controllers/Cash/RegisterController';
 
-type Denom = { id: number; value: number; kind: "bill" | "coin"; currency_code: string };
+export default function CloseShiftWrapperPage({ register, denominations, activeCurrency, expected, shift }: any) {
+    const goBack = () => router.visit(RegisterController.cashbook.url({ register: register.id }));
 
-export default function Page({
-    shift,
-    register,
-    denominations,
-    expected,
-    activeCurrency,
-}: {
-    shift: { id: string | number; register_id: number; opened_at: string };
-    register: { id: number; name: string };
-    denominations: Denom[];
-    expected: Record<string, number>;
-    activeCurrency: string;
-}) {
-    const backToCashbook = () =>
-        router.visit(RegisterController.cashbook.url({ register: register.id }));
 
     return (
-        <AppLayout
-            breadcrumbs={[
-                { title: "Cajas", href: RegisterController.index.url() },
-                { title: register.name, href: RegisterController.cashbook.url({ register: register.id }) },
-                { title: "Cerrar turno", href: "#" },
-            ]}
-        >
-            <CloseShiftPage
-                shiftId={shift.id}
+        <AppLayout breadcrumbs={[
+            { title: "Cajas", href: RegisterController.index.url() },
+            { title: register.name, href: RegisterController.cashbook.url({ register: register.id }) },
+            { title: "Abrir turno", href: "#" },
+        ]}>
+            <CashCountPage
+                mode="close"
                 registerId={register.id}
+                shiftId={shift?.id}
                 denominations={denominations}
-                expected={expected}
                 activeCurrency={activeCurrency}
-                onCancel={backToCashbook}
-                onSuccess={backToCashbook}
+                onSuccess={goBack}
+                onCancel={goBack}
+                expected={expected}
             />
         </AppLayout>
     );

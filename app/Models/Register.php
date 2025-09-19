@@ -23,4 +23,9 @@ class Register extends Model
     {
         return $q->where('store_id', $storeId);
     }
+
+    public function openShift()
+    {
+        return $this->shifts()->where('status', 'open')->first();
+    }
 }

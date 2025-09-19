@@ -59,10 +59,6 @@ export default function ProductIndexPage({ products, categories, suppliers, stor
     // --- 2. ESTADO LOCAL DE LA UI ---
     const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 
-    const getStockLevel = (p: Product) => Number(p.total_stock ?? 0);
-    // const lowStockCount = useMemo(() => {
-    //     return products.data.filter(p => getStockLevel(p) < 10).length;
-    // }, [products.data]);
 
 
 
@@ -82,6 +78,8 @@ export default function ProductIndexPage({ products, categories, suppliers, stor
                             viewMode={viewMode}
                             onViewModeChange={setViewMode}
                             onAddNew={actions.handleCreate}
+                            categories={categories}
+                            suppliers={suppliers}
                         />
                     </CardHeader>
                     <CardContent>
@@ -115,13 +113,14 @@ export default function ProductIndexPage({ products, categories, suppliers, stor
                         )}
                     </CardContent>
 
-                    {products.links.length > 3 && ( // <-- CORREGIDO: Lee de products.links
+
+                    {products.links.length > 3 && (
                         <div className="border-t p-4 flex items-center justify-between">
                             <span className="text-sm text-muted-foreground">
                                 Mostrando {products.from} a {products.to} de {products.total} resultados
                             </span>
-                            {/* <Paginator links={products.links} preserveScroll /> */}
-                            <Pagination links={products.links} />
+                            {/* Aquí pasamos `products.links` que ya viene del backend con todos los filtros */}
+                            <Paginator links={products.links} />
                         </div>
                     )}
                 </Card>

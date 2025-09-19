@@ -183,3 +183,53 @@ export interface PaginationLink {
     label: string;
     active: boolean;
 }
+
+export interface Register {
+    id: number;
+    name: string;
+}
+export interface Shift {
+    id: string;
+    status: 'open' | 'closed';
+    opened_at: string;
+    closed_at?: string | null;
+    opened_by?: { id: number; name: string } | null;
+    currency_code: string;
+}
+
+export interface ShiftSummary {
+    opening: number;
+    income: number;
+    expense: number;
+    cash_in_hand: number;
+    expense_visible: number;
+    closing: number;
+}
+
+export interface Movement {
+    id: number;
+    created_at: string;
+    direction: 'in' | 'out';
+    amount: number;
+    reason?: string | null;
+    reference?: string | null;
+    user?: { id: number; name: string } | null;
+    pay_method?: string | null;
+    pay_currency?: string | null;
+    sale_number?: string | null;
+}
+
+export interface PaymentsAggRow {
+    method: string;
+    currency_code: string;
+    count: number;
+    amount: number;
+    amount_in_sale_ccy: number;
+}
+
+export interface Denomination {
+    id: number;
+    value: number;
+    kind: 'bill' | 'coin';
+    currency_code: string;
+}
