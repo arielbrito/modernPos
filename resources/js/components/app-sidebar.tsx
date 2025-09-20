@@ -46,8 +46,9 @@ import users from '@/routes/users';
 import customers from '@/routes/customers';
 import ncf from '@/routes/fiscal/ncf';
 import registers from '@/routes/cash/registers';
-import cash from '@/routes/cash';
+import cash, { cashbook } from '@/routes/cash';
 import sales from '@/routes/sales';
+import admin from '@/routes/admin';
 
 /**
  * Configuración de navegación principal
@@ -66,8 +67,19 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'Gestión de Caja',
-        href: cash.cashbook.url(),
         icon: ComputerIcon, // Icono más específico para caja
+        children: [
+            {
+                title: 'Caja Principal',
+                href: cashbook.url(),
+                icon: ComputerIcon,
+            },
+            {
+                title: 'Historial de Cierres',
+                href: cash.shifts.index.url(),
+                icon: CircleDollarSign,
+            },
+        ]
     },
     {
         title: 'Clientes',
@@ -139,6 +151,11 @@ const mainNavItems: NavItem[] = [
                 title: 'Usuarios del Sistema',
                 href: users.index.url(),
                 icon: Users2,
+            },
+            {
+                title: 'Sincronizacion DGII',
+                href: admin.dgiiSync.create.url(),
+                icon: Landmark,
             },
             {
                 title: 'Secuencias NCF',

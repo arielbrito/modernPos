@@ -22,6 +22,19 @@ class CashShiftReportController extends Controller
         ]);
     }
 
+    public function print(CashShift $shift, ShiftReportService $svc)
+    {
+        $this->authorize('view', $shift);
+
+        // Reutilizamos el mismo servicio para construir el reporte
+        $report = $svc->build($shift->id);
+
+        // Renderizamos una vista de Inertia diferente, diseñada para imprimir
+        return Inertia::render('cash/shifts/Print', [
+            'report' => $report,
+        ]);
+    }
+
     public function export(CashShift $shift, ShiftReportService $svc): StreamedResponse
     {
         $rows = $svc->paymentsFlat($shift->id);

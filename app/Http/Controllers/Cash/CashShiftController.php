@@ -6,14 +6,60 @@ namespace App\Http\Controllers\Cash;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Cash\OpenShiftRequest;
 use App\Http\Requests\Cash\CloseShiftRequest;
-use App\Models\{Register, CashShift};
+use App\Models\{Register, CashShift, Store, User};
 use App\Services\CashRegisterService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 
 class CashShiftController extends Controller
 {
     public function __construct(private CashRegisterService $svc) {}
+
+
+    public function index(Request $request)
+    {
+        $this->authorize('viewAny', CashShift::class); // Asumiendo que tienes una policy
+
+        // --- 1. CAPTURA DE FILTROS ---
+        $filters = $request->validate([
+            'date_from' => 'nullable|date_format:Y-m-d',
+            'date_to' => 'nullable|date_format:Y-m-d',
+            'user_id' => 'nullable|integer|exists:users,id',
+            'store_id' => 'nullable|integer|exists:stores,id',
+        ]);
+
+        // --- 2. CONSULTA BASE EFICIENTE ---
+        $query = CashShift::query()
+            ->where('status', 'closed')
+            ->with(['register:id,name,store_id', 'register.store:id,name', 'closedBy:id,name'])
+            ->when($filters['date_from'] ?? null, fn($q, $date) => $q->whereDate('closed_at', '>=', $date))
+            ->when($filters['date_to'] ?? null, fn($q, $date) => $q->whereDate('closed_at', '<=', $date))
+            ->when($filters['user_id'] ?? null, fn($q, $userId) => $q->where('closed_by', $userId))
+            ->when($filters['store_id'] ?? null, fn($q, $storeId) => $q->whereHas('register', fn($rq) => $rq->where('store_id', $storeId)));
+
+        // --- 3. CÁLCULO DE KPIs ---
+        // Clonamos la consulta ANTES de paginar para calcular totales sobre todos los resultados
+        $kpiQuery = (clone $query);
+        $kpis = [
+            'total_sales' => $kpiQuery->sum(DB::raw("CAST(meta->'variance'->>'total_sales' AS NUMERIC)")),
+            'net_variance' => $kpiQuery->sum(DB::raw("CAST(meta->'variance'->>'net_variance' AS NUMERIC)")),
+            'shifts_with_shortage' => (clone $kpiQuery)->where(DB::raw("CAST(meta->'variance'->>'net_variance' AS NUMERIC)"), '<', 0)->count(),
+            'shifts_with_surplus' => (clone $kpiQuery)->where(DB::raw("CAST(meta->'variance'->>'net_variance' AS NUMERIC)"), '>', 0)->count(),
+        ];
+
+        // --- 4. PAGINACIÓN ---
+        $shifts = $query->latest('closed_at')->paginate(15)->withQueryString();
+
+        return Inertia::render('cash/shifts/index', [
+            'shifts' => $shifts,
+            'kpis' => $kpis,
+            'filters' => $filters,
+            'users' => User::all(['id', 'name']),   // Para el dropdown de filtros
+            'stores' => Store::all(['id', 'name']), // Para el dropdown de filtros
+        ]);
+    }
 
     public function open(OpenShiftRequest $r, Register $register, CashRegisterService $svc)
     {

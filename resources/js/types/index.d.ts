@@ -189,12 +189,14 @@ export interface Register {
     name: string;
 }
 export interface Shift {
-    id: string;
+    store: any;
+    register: any;
+    id: number;
     status: 'open' | 'closed';
     opened_at: string;
     closed_at?: string | null;
     opened_by?: { id: number; name: string } | null;
-    currency_code: string;
+    currency_code?: string;
 }
 
 export interface ShiftSummary {
@@ -233,3 +235,9 @@ export interface Denomination {
     kind: 'bill' | 'coin';
     currency_code: string;
 }
+
+export type PageProps<T extends Record<string, unknown> = Record<string, unknown>> = T & {
+    auth: {
+        user: User;
+    };
+};

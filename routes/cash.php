@@ -47,8 +47,13 @@ Route::get('shifts/{shift}/close', [RegisterController::class, 'closeShiftForm']
 Route::get('/cash/shifts/{shift}/report', [CashShiftReportController::class, 'show'])
     ->name('cash.shifts.report');
 
+Route::get('/cash/shifts/{shift}/print', [CashShiftReportController::class, 'print'])
+    ->name('cash.shifts.report.print');
+
 Route::get('/cash/shifts/{shift}/report/export', [CashShiftReportController::class, 'export'])
     ->name('cash.shifts.report.export');
+
+Route::get('/cash/shifts', [CashShiftController::class, 'index'])->name('cash.shifts.index');
 
 
 Route::post('/cash/registers/{register}/shift/open', [CashShiftController::class, 'open'])

@@ -7,6 +7,7 @@ use App\Http\Controllers\Fiscal\NcfApiController;
 use App\Http\Controllers\Fiscal\NcfSequenceController;
 use App\Http\Controllers\Notifications\NotificationController;
 use App\Http\Controllers\POS\PosController;
+use App\Http\Controllers\Fiscal\DgiiSynController;
 
 
 use App\Http\Middleware\EnsureStoreIsSelected;
@@ -23,6 +24,12 @@ use Inertia\Inertia;
 Route::get('/', function () {
     return Inertia::render('welcome');
 })->name('home');
+
+Route::prefix('admin')->middleware(['auth', 'verified'])->name('admin.')->group(function () {
+    Route::get('/dgii-sync', [DgiiSynController::class, 'create'])->name('dgii-sync.create');
+    Route::post('/dgii-sync', [DgiiSynController::class, 'store'])->name('dgii-sync.store');
+    Route::get('/dgii-sync/status', [DgiiSynController::class, 'status'])->name('dgii-sync.status');
+});
 
 
 // --- Rutas para Usuarios Autenticados ---
