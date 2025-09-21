@@ -4,6 +4,10 @@ namespace App\Providers;
 
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Http\Request;
+
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -35,5 +39,12 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('registers.manage', fn($u) => $u->can('registers.manage'));
         Gate::define('registers.select', fn($u) => $u->can('registers.select'));
         Gate::define('cash_shirt.open', fn($u) => $u->can('cash_shirt.open'));
+
+
+        RateLimiter::for('dgii-status', function (Request $request) {
+            return [
+                Limit::perMinute(60)->by(optional($request->user())->id ?: $request->ip()),
+            ];
+        });
     }
 }

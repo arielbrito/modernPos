@@ -7,7 +7,7 @@ use App\Http\Controllers\Fiscal\NcfApiController;
 use App\Http\Controllers\Fiscal\NcfSequenceController;
 use App\Http\Controllers\Notifications\NotificationController;
 use App\Http\Controllers\POS\PosController;
-use App\Http\Controllers\Fiscal\DgiiSynController;
+use App\Http\Controllers\Fiscal\DgiiSyncController;
 
 
 use App\Http\Middleware\EnsureStoreIsSelected;
@@ -25,11 +25,38 @@ Route::get('/', function () {
     return Inertia::render('welcome');
 })->name('home');
 
-Route::prefix('admin')->middleware(['auth', 'verified'])->name('admin.')->group(function () {
-    Route::get('/dgii-sync', [DgiiSynController::class, 'create'])->name('dgii-sync.create');
-    Route::post('/dgii-sync', [DgiiSynController::class, 'store'])->name('dgii-sync.store');
-    Route::get('/dgii-sync/status', [DgiiSynController::class, 'status'])->name('dgii-sync.status');
-});
+// routes/web.php
+
+
+Route::middleware(['auth', 'verified'])
+    ->prefix('admin')
+    ->as('admin.')
+    ->group(function () {
+
+        Route::prefix('dgii-sync')->name('dgii-sync.')->group(function () {
+
+            Route::get('/', [DgiiSyncController::class, 'create'])
+                ->middleware('permission:dgii.sync.view')
+                ->name('create');
+
+            Route::post('/', [DgiiSyncController::class, 'store'])
+                ->middleware('permission:dgii.sync.start')
+                ->name('store');
+
+            Route::get('/status', [DgiiSyncController::class, 'status'])
+                ->middleware(['permission:dgii.sync.view', 'throttle:dgii-status'])
+                ->name('status');
+
+            Route::post('/cancel', [DgiiSyncController::class, 'cancel'])
+                ->middleware(['permission:dgii.sync.cancel'])
+                ->name('cancel');
+
+            Route::get('/download-original', [DgiiSyncController::class, 'downloadOriginal'])
+                ->middleware(['permission:dgii.sync.download'])
+                ->name('download-original');
+        });
+    });
+
 
 
 // --- Rutas para Usuarios Autenticados ---

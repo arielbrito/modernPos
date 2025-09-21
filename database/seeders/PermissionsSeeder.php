@@ -61,6 +61,10 @@ class PermissionsSeeder extends Seeder
             'sales.void',
             'sales.price.override',
             'sales.discount.override',
+            'dgii.sync.view',
+            'dgii.sync.start',
+            'dgii.sync.cancel',
+            'dgii.sync.download',
 
         ];
 
