@@ -13,7 +13,7 @@ Artisan::command('inspire', function () {
 Schedule::call(function () {
     app(\App\Services\Alerts\LowStockAlert::class)->run();
 })
-    ->everyTenMinutes()
+    ->everyOddHour()
     ->name('low-stock-alert') // <-- AÑADE ESTA LÍNEA
     ->withoutOverlapping()
     ->onOneServer();

@@ -15,30 +15,63 @@ class LowStockAlert
     {
         $threshold = (int) config('pos.alerts.low_stock_threshold', 3);
 
-        /** @var Collection<int, \App\Models\Inventory> $rows */
-        $rows = Inventory::query()
+        $lowStockRows = Inventory::query()
             ->with(['variant:id,sku,product_id,attributes', 'variant.product:id,name', 'store:id,code,name'])
             ->where('quantity', '<=', $threshold)
-            ->orderBy('store_id')
-            ->orderBy('product_variant_id')
-            ->get();
+            ->lazy();
 
-        if ($rows->isEmpty()) {
+        if ($lowStockRows->isEmpty()) {
             return;
         }
 
-        // A quién notificamos
-        $recipients = $this->recipients();
-        if ($recipients->isEmpty()) {
-            return;
-        }
+        $rowsByStore = $lowStockRows->groupBy('store_id');
 
-        Notification::send($recipients, new LowStockNotification($rows, $threshold));
+        foreach ($rowsByStore as $storeId => $rowsInStore) {
+
+            $recipients = $this->recipientsForStore($storeId);
+
+            if ($recipients->isEmpty()) {
+                continue;
+            }
+
+            // --- LA SOLUCIÓN ESTÁ AQUÍ ---
+            // Convertimos la LazyCollection de esta tienda a una Collection normal.
+            Notification::send($recipients, new LowStockNotification($rowsInStore->collect(), $threshold));
+        }
     }
 
-    protected function recipients(): Collection
+    /**
+     * Obtiene los destinatarios de alertas para una tienda específica.
+     *
+     * @param int $storeId
+     * @return Collection
+     */
+    protected function recipientsForStore(int $storeId): Collection
     {
-        // Si tienes Spatie Permission
+        $roleName = config('pos.alerts.recipients_role', 'manager');
+
+        // Lógica ideal: Usuarios con un rol que están asignados a la tienda específica.
+        // Esto asume que tienes una tabla pivote `store_user` y una relación en el modelo User.
+        if (method_exists(User::class, 'role')) {
+            $users = User::role($roleName)
+                ->whereHas('stores', fn($query) => $query->where('stores.id', $storeId))
+                ->get();
+
+            if ($users->isNotEmpty()) {
+                return $users;
+            }
+        }
+
+        // Si lo anterior falla, volvemos a tu lógica de fallback original,
+        // que notifica a todos los managers/admins como último recurso.
+        return $this->globalRecipients();
+    }
+
+    /**
+     * Fallback para obtener destinatarios globales si no se encuentran por tienda.
+     */
+    protected function globalRecipients(): Collection
+    {
         $role = config('pos.alerts.recipients_role', 'manager');
 
         if (method_exists(User::class, 'role')) {
@@ -46,13 +79,11 @@ class LowStockAlert
             if ($users->isNotEmpty()) return $users;
         }
 
-        // Fallback: admin boolean si existe
         if (Schema::hasColumn('users', 'is_admin')) {
             $admins = User::where('is_admin', true)->get();
             if ($admins->isNotEmpty()) return $admins;
         }
 
-        // Último fallback: primer usuario
         return User::query()->limit(1)->get();
     }
 }

@@ -37,6 +37,8 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import axios from 'axios';
 
+import NotificationController from '@/actions/App/Http/Controllers/Notifications/NotificationController';
+
 type NotificationItem = {
     id: string;
     type: string;
@@ -121,6 +123,42 @@ export default function NotificationsIndex() {
     }, [items, filterType, searchTerm]);
 
     // Funciones de acción mejoradas con loading states
+    const inertiaRequest = (method: 'post' | 'delete', url: string, options = {}) => {
+        const defaultOptions = {
+            preserveState: true,
+            preserveScroll: true,
+            only: ['notifications', 'unread_count'],
+            onStart: () => setIsLoading(true),
+            onFinish: () => setIsLoading(false),
+            onSuccess: () => {
+                // Opcional: mostrar un toast de éxito
+            },
+            onError: (errors: any) => {
+                console.error("Error:", errors);
+                // Opcional: mostrar un toast de error
+            }
+        };
+        router[method](url, {}, { ...defaultOptions, ...options });
+    };
+
+    const markAll = () => {
+        inertiaRequest('post', NotificationController.markAllRead.url());
+    };
+
+
+    const markOne = (id: string) => {
+        inertiaRequest('post', NotificationController.markRead.url(id));
+    };
+
+    const removeOne = (id: string) => {
+        inertiaRequest('delete', NotificationController.destroy.url(id));
+        // Limpiamos la selección si el ítem estaba seleccionado
+        setSelectedIds(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(id);
+            return newSet;
+        });
+    };
     const performAction = async (action: () => Promise<void>) => {
         setIsLoading(true);
         try {
@@ -132,25 +170,6 @@ export default function NotificationsIndex() {
             setIsLoading(false);
         }
     };
-
-    const markAll = async () => {
-        await performAction(async () => {
-            await axios.post('/api/notifications/read-all', {}, { withCredentials: true });
-        });
-    };
-
-    const markOne = async (id: string) => {
-        await performAction(async () => {
-            await axios.post(`/api/notifications/${id}/read`, {}, { withCredentials: true });
-        });
-    };
-
-    const removeOne = async (id: string) => {
-        await performAction(async () => {
-            await axios.delete(`/api/notifications/${id}`, { withCredentials: true });
-        });
-    };
-
     const markSelected = async () => {
         await performAction(async () => {
             const promises = Array.from(selectedIds).map(id =>

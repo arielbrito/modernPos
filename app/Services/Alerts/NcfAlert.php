@@ -20,12 +20,10 @@ class NcfAlert
         /** @var Collection<int, NcfSequence> $seqs */
         $seqs = NcfSequence::query()
             ->with(['store:id,code,name'])
-            ->get()
-            ->filter(function (NcfSequence $s) use ($threshold) {
-                $remaining = $this->remainingFor($s);
-                return $remaining !== null && $remaining <= $threshold;
-            })
-            ->values();
+            // Filtramos directamente en la base de datos
+            ->whereRaw('COALESCE(end_number, 0) - COALESCE(next_number, 0) + 1 <= ?', [$threshold])
+            ->where('is_active', true) // Asumiendo que tienes una columna para secuencias activas
+            ->get();
 
         if ($seqs->isEmpty()) return;
 

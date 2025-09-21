@@ -35,28 +35,25 @@ class NotificationController extends Controller
     }
 
     // Página Inertia
+    // Http/Controllers/Notifications/NotificationController.php
+
+    // ...
     public function index(Request $req)
     {
         $user = $req->user();
 
+        // El ->through() es redundante, ya que la notificación se formatea sola.
+        // Simplemente paginamos. Laravel llamará al método toArray() automáticamente.
         $notifications = $user->notifications()
             ->latest()
-            ->paginate(20, ['id', 'type', 'data', 'read_at', 'created_at'])
-            ->through(function ($n) {
-                return [
-                    'id'         => $n->id,
-                    'type'       => $n->type,
-                    'data'       => $n->data,
-                    'read_at'    => $n->read_at,
-                    'created_at' => $n->created_at,
-                ];
-            });
+            ->paginate(20, ['id', 'type', 'data', 'read_at', 'created_at']);
 
         return Inertia::render('notifications/index', [
             'notifications' => $notifications,
-            'unread_count'  => $user->unreadNotifications()->count(),
+            'unread_count'  => $user->unreadNotifications()->count(), // Puedes optimizar esto si quieres
         ]);
     }
+    // ...
 
     public function markRead(Request $req, string $id)
     {
