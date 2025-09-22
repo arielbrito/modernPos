@@ -38,7 +38,7 @@ const CartItemCard = ({ item, lineMeta, onUpdateQuantity, onUpdateLineMeta }: {
     onUpdateQuantity: (id: number, qty: number) => void;
     onUpdateLineMeta: (id: number, patch: Partial<LineMeta>) => void;
 }) => (
-    <div className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+    <div className="bg-card rounded-xl p-3 border border-slate-200 dark:border-slate-700">
         <div className="flex items-start justify-between mb-2">
             <div className="flex-1">
                 <h4 className="font-medium text-slate-900 dark:text-white text-sm leading-tight pr-2" title={item.name}>
@@ -84,10 +84,10 @@ export function CartPanel({
 }: CartPanelProps) {
 
     return (
-        <div className="h-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex flex-col rounded-lg shadow-sm">
+        <div className="h-full bg-background border flex flex-col rounded-lg shadow-sm">
             {/* ---- CABECERA DEL CARRITO ---- */}
-            <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-                <h2 className="font-semibold text-lg">Orden Actual</h2>
+            <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-chart-5 rounded-t-lg mb-2">
+                <h2 className="font-semibold text-lg text-slate-200">Orden Actual</h2>
             </div>
 
             {/* ---- LISTA DE ITEMS (SCROLLABLE) ---- */}
@@ -109,7 +109,7 @@ export function CartPanel({
 
             {/* ---- FOOTER CON TOTALES Y ACCIONES (AHORA VISIBLE) ---- */}
             {items.length > 0 && (
-                <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-card rounded-b-lg">
                     <div className="text-sm space-y-1 mb-4">
                         <div className="flex justify-between"><span>Subtotal</span><span>${f2(totals.subtotal)}</span></div>
                         <div className="flex justify-between text-red-600"><span>Descuentos</span><span>-${f2(totals.discount_total)}</span></div>

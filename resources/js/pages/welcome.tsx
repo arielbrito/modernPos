@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/button';
 // Componente para el Logo
 const Logo = () => (
     <div className="flex items-center gap-2">
-        <Box className="h-7 w-7 text-emerald-500" />
+        <Box className="h-7 w-7 text-primary" />
         <span className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-200">
-            ModernPos
+            StoneRetail
         </span>
     </div>
 );
@@ -53,14 +53,14 @@ export default function Welcome() {
 
     return (
         <>
-            <Head title="Bienvenido a ModernPos" />
-            <div className="flex min-h-screen flex-col bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-200">
+            <Head title="Bienvenido a StoneRetail" />
+            <div className="flex min-h-screen flex-col bg-background text-slate-800  dark:text-slate-200">
                 {/* Header */}
                 <motion.header
                     initial="hidden"
                     animate="show"
                     transition={{ delayChildren: 0.2, staggerChildren: 0.1 }}
-                    className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between p-4 px-8 bg-white/80 backdrop-blur-md dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800"
+                    className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between p-4 px-8 bg-background backdrop-blur-md border-b border-slate-200 dark:border-slate-800"
                 >
                     <motion.div variants={FADE_IN_ANIMATION_VARIANTS}>
                         <Logo />
@@ -82,8 +82,8 @@ export default function Welcome() {
                             variants={FADE_IN_ANIMATION_VARIANTS}
                             className="text-5xl md:text-7xl font-extrabold tracking-tighter"
                         >
-                            <span className="bg-gradient-to-r from-emerald-500 to-cyan-500 bg-clip-text text-transparent">
-                                ModernPos
+                            <span className="bg-gradient-to-r from-stoneretail-primary-dark to-stoneretail-primary-light bg-clip-text text-transparent">
+                                StoneRetail
                             </span>
                             : Tu Negocio, en Control.
                         </motion.h1>

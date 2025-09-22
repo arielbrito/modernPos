@@ -80,8 +80,15 @@ export default function CashbookShow(props: CashbookShowProps) {
                     isRefreshing={isRefreshing}
                 />
 
-                <div className="grid gap-6 lg:grid-cols-5">
-                    <div className="lg:col-span-3 space-y-6">
+                <div className="grid gap-6 lg:grid-cols-3">
+                    <div className="lg:col-span-6 space-y-6">
+                        <PaymentMethodsSummary
+                            flow={flow}
+                            currency={activeCurrency}
+                            shift={shift}
+                        />
+                    </div>
+                    <div className="lg:col-span-6 space-y-6 lg:grid-cols-2 lg:gap-6 lg:grid">
                         <MovementsTable
                             title="Ingresos"
                             movements={incomes}
@@ -101,13 +108,7 @@ export default function CashbookShow(props: CashbookShowProps) {
                             onSearchChange={setSearchExpense}
                         />
                     </div>
-                    <div className="lg:col-span-2">
-                        <PaymentMethodsSummary
-                            flow={flow}
-                            currency={activeCurrency}
-                            shift={shift}
-                        />
-                    </div>
+
                 </div>
             </div>
 

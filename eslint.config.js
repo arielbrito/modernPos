@@ -41,4 +41,7 @@ export default [
         ignores: ['vendor', 'node_modules', 'public', 'bootstrap/ssr', 'tailwind.config.js'],
     },
     prettier, // Turn off all rules that might conflict with Prettier
+    {
+        'css.lint.unknownAtRules': 'ignore',
+    },
 ];

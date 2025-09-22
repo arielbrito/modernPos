@@ -174,18 +174,18 @@ const mainNavItems: NavItem[] = [
 /**
  * Enlaces del pie de página con recursos externos
  */
-const footerNavItems: NavItem[] = [
-    {
-        title: 'Repositorio',
-        href: 'https://github.com/laravel/react-starter-kit',
-        icon: Folder,
-    },
-    {
-        title: 'Documentación',
-        href: 'https://laravel.com/docs/starter-kits#react',
-        icon: BookOpen,
-    },
-];
+// const footerNavItems: NavItem[] = [
+//     {
+//         title: 'Repositorio',
+//         href: 'https://github.com/laravel/react-starter-kit',
+//         icon: Folder,
+//     },
+//     {
+//         title: 'Documentación',
+//         href: 'https://laravel.com/docs/starter-kits#react',
+//         icon: BookOpen,
+//     },
+// ];
 
 /**
  * Componente principal de la barra lateral
@@ -223,10 +223,10 @@ export function AppSidebar() {
             </SidebarContent>
 
             <SidebarFooter className="border-t border-sidebar-border p-4">
-                <NavFooter
+                {/* <NavFooter
                     items={footerNavItems}
                     className="mb-4"
-                />
+                /> */}
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

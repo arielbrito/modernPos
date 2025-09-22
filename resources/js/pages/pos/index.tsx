@@ -72,7 +72,7 @@ export default function PosPage() {
     return (
         <AppLayout>
             <Head title="Punto de Venta" />
-            <div className="h-screen flex flex-col bg-slate-100 dark:bg-slate-900 overflow-hidden">
+            <div className="h-screen flex flex-col  bg-background overflow-hidden">
                 {/* PosHeader ha sido eliminado */}
 
                 <main className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6 p-6 overflow-hidden min-h-0">
@@ -89,7 +89,7 @@ export default function PosPage() {
                             ncfInfo={ncfInfo}
                             onNcfChange={handleNcfChange}
                         />
-                        <div className="flex-1 rounded-lg overflow-hidden">
+                        <div className="flex-1 rounded-lg overflow-hidden ">
                             <ProductGrid
                                 products={search.results}
                                 isLoading={search.isLoading}
@@ -101,7 +101,7 @@ export default function PosPage() {
                     </div>
 
                     {/* Columna del Carrito */}
-                    <div className="hidden lg:block min-h-0">
+                    <div className=" lg:block min-h-0">
                         <CartPanel
                             items={cart.items}
                             totals={cart.totals}

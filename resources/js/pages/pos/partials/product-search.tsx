@@ -32,7 +32,7 @@ export function ProductSearch({
     onNcfChange,
 }: ProductSearchProps) {
     return (
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
+        <div className="bg-chart-5 border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
             <div className="px-4 py-3">
                 <div className="flex items-center justify-between gap-4">
                     {/* Input de Búsqueda */}
@@ -43,7 +43,7 @@ export function ProductSearch({
                             placeholder="Buscar por nombre o escanear código..."
                             value={query}
                             onChange={(e) => onQueryChange(e.target.value)}
-                            className="pl-10 pr-4 h-10 border-slate-300 focus:ring-2 focus:ring-emerald-500"
+                            className="pl-10 pr-4 h-10  pos-input"
                         />
                     </div>
 

@@ -34,7 +34,7 @@ export function CashbookHeader({
 
     const shiftStatusBadge = useMemo(() => {
         if (!shift) {
-            return <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800"><XCircle className="h-3 w-3 mr-1" /> Sin Turno</Badge>;
+            return <Badge variant="outline" className="bg-background"><XCircle className="h-3 w-3 mr-1" /> Sin Turno</Badge>;
         }
         return shift.status === "open"
             ? <Badge className="bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 hover:bg-green-200"><CheckCircle2 className="h-3 w-3 mr-1" /> Turno Abierto</Badge>
@@ -42,7 +42,7 @@ export function CashbookHeader({
     }, [shift]);
 
     return (
-        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-600 to-indigo-800 dark:from-blue-800 dark:to-indigo-900 text-white shadow-lg">
+        <div className="relative overflow-hidden rounded-xl gradient-stoneretail text-white shadow-lg">
             <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_20px_20px,_rgba(255,255,255,0.15)_1px,_transparent_1px)] bg-[length:40px_40px]" />
 
             <div className="relative p-6 lg:p-8 space-y-4">

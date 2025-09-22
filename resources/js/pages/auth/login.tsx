@@ -19,9 +19,9 @@ interface LoginProps {
 
 const Logo = () => (
     <div className="flex items-center gap-2 mb-8">
-        <Box className="h-8 w-8 text-emerald-500" />
-        <span className="text-3xl font-bold tracking-tight text-slate-800 dark:text-slate-200">
-            ModernPos
+        <Box className="h-8 w-8 text-sidebar" />
+        <span className="text-3xl font-bold tracking-tight text-sidebar">
+            StoneRetail
         </span>
     </div>
 );
@@ -45,7 +45,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
             <Head title="Iniciar Sesión" />
             <div className="min-h-screen w-full lg:grid lg:grid-cols-2">
                 {/* Columna Izquierda: Branding y Bienvenida */}
-                <div className="hidden lg:flex flex-col items-center justify-center p-10 bg-slate-100 dark:bg-slate-800/50 border-r dark:border-slate-800">
+                <div className="hidden lg:flex flex-col items-center justify-center p-10 bg-gradient-to-br bg-accent border-r dark:border-slate-800">
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -56,7 +56,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                         <h1 className="text-3xl font-bold tracking-tight mt-4">
                             Bienvenido de Nuevo
                         </h1>
-                        <p className="mt-2 text-slate-600 dark:text-slate-400">
+                        <p className="mt-2  text-card-foreground">
                             Gestiona tus ventas e inventario de forma simple y eficiente.
                         </p>
 
@@ -64,7 +64,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                 </div>
 
                 {/* Columna Derecha: Formulario de Login */}
-                <div className="flex items-center justify-center p-6 sm:p-12">
+                <div className="flex items-center justify-center p-6 sm:p-12 bg-sidebar">
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}

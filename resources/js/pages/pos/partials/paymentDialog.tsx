@@ -258,7 +258,7 @@ export function PaymentDialog({
                         <div className="grid sm:grid-cols-2 gap-4">
                             <div>
                                 <Label htmlFor="amount">Monto ({currency})</Label>
-                                <Input id="amount" value={amount} onChange={(e) => setAmount(e.target.value)} type="number" step="0.01" placeholder="0.00" className="text-lg h-12" />
+                                <Input id="amount" value={amount} onChange={(e) => setAmount(e.target.value)} type="number" step="0.01" placeholder="0.00" className="text-lg h-12" readOnly />
                             </div>
                             <div>
                                 <Label htmlFor="currency">Moneda</Label>

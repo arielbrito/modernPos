@@ -20,17 +20,17 @@ export function PaymentMethodsSummary({ flow, currency, shift }: PaymentMethodsS
     if (!flow) return null; // No renderizar nada si no hay datos de flujo
 
     return (
-        <Card className="shadow-sm border-0 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 h-full">
+        <Card className="shadow-sm border-0 pos-card  h-full">
             <CardHeader className="pb-4">
-                <CardTitle className="flex items-center gap-3 text-slate-800 dark:text-slate-200">
-                    <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                        <Calculator className="h-5 w-5 text-slate-600 dark:text-slate-400" />
+                <CardTitle className="flex items-center gap-3 text-slate-800 bg dark:text-slate-200">
+                    <div className="p-2 bg-accent rounded-lg">
+                        <Calculator className="h-5 w-5 text-slate-600 dark:text-secondary " />
                     </div>
                     <span className="text-lg">Resumen por Método</span>
                 </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 pos-badge-success rounded-lg border border-green-200 dark:border-green-800">
                     <div className="flex items-center gap-2">
                         <div className="p-1 bg-green-100 dark:bg-green-900 rounded">
                             <DollarSign className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -44,12 +44,12 @@ export function PaymentMethodsSummary({ flow, currency, shift }: PaymentMethodsS
                     </span>
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-indigo-50 dark:bg-indigo-950 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 pos-badge-warning rounded-lg border border-indigo-200 dark:border-indigo-800">
                     <div className="flex items-center gap-2">
-                        <div className="p-1 bg-indigo-100 dark:bg-indigo-900 rounded">
-                            <Receipt className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                        <div className="p-1 bg-background rounded">
+                            <Receipt className="h-4 w-4 text-foreground" />
                         </div>
-                        <span className="text-sm font-medium text-indigo-800 dark:text-indigo-200">
+                        <span className="text-sm font-medium ">
                             Tarjeta/Otros ({shift?.currency_code ?? "DOP"})
                         </span>
                     </div>
