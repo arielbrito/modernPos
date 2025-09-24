@@ -61,7 +61,7 @@ class ProductVariant extends Model
         return $this->belongsTo(Product::class, 'product_id');
     }
 
-    public function inventory()
+    public function inventory(): HasMany
     {
         return $this->hasMany(Inventory::class, 'product_variant_id');
     }

@@ -6,12 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Inventory\Purchase\ReceivePurchaseRequest;
 use App\Http\Requests\Inventory\Purchase\StorePurchasePaymentRequest;
 use App\Http\Requests\Inventory\Purchase\StorePurchaseRequest;
+use App\Http\Requests\Inventory\Purchase\UpdatePurchaseRequest;
 use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
 use App\Models\PurchasePayment;
 use App\Models\Supplier;
+use App\Services\PurchaseCreationService;
 use App\Services\PurchaseReceivingService;
+use App\Services\PurchaseUpdateService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -25,7 +28,11 @@ use Illuminate\Http\UploadedFile;
 class PurchaseController extends Controller
 {
     use AuthorizesRequests;
-    public function __construct(private PurchaseReceivingService $receivingService) {}
+    public function __construct(
+        private PurchaseCreationService $creationService,
+        private PurchaseReceivingService $receivingService,
+        private PurchaseUpdateService $updateService,
+    ) {}
     /**
      * Display a listing of the resource.
      */
@@ -78,99 +85,21 @@ class PurchaseController extends Controller
      */
     public function store(StorePurchaseRequest $request)
     {
-        $data = $request->validated();
-        $userId = Auth::id();
         $storeId = session('active_store_id');
 
         if (!$storeId) {
-            // Esto podría ser un error o una redirección, dependiendo de tu preferencia.
-            return back()->with('error', 'No se ha seleccionado una tienda activa. Por favor, selecciona una tienda para continuar.');
+            return back()->with('error', 'No se ha seleccionado una tienda activa.');
         }
 
-        return DB::transaction(function () use ($data, $userId, $storeId) {
+        // 3. ¡Toda la lógica compleja ahora vive aquí!
+        $this->creationService->create(
+            $request->validated(),
+            Auth::id(),
+            $storeId
+        );
 
-
-
-            $purchase = Purchase::create([
-                'supplier_id'   => $data['supplier_id'],
-                'store_id'      => $storeId, // o $data['store_id']
-                'code'          => 'PENDING', // temporal
-                'status'        => 'draft',
-                'invoice_number' => $data['invoice_number'] ?? null,
-                'invoice_date'  => $data['invoice_date'] ?? null,
-                'currency'      => $data['currency'],
-                'exchange_rate' => $data['exchange_rate'],
-                'freight'       => $data['freight'] ?? 0,
-                'other_costs'   => $data['other_costs'] ?? 0,
-                'notes'         => $data['notes'] ?? null,
-                'created_by'    => $userId,
-            ]);
-
-            $purchase->update([
-                'code' => 'OC-' . now()->format('Ymd') . '-' . str_pad((string)$purchase->id, 5, '0', STR_PAD_LEFT)
-            ]);
-
-            $subtotal = 0;
-            $discountTotal = 0;
-            $taxTotal = 0;
-            $lineTotals = [];
-
-            foreach ($data['items'] as $row) {
-                $qty = (float)$row['qty_ordered'];
-                $unit = (float)$row['unit_cost'];
-                $discPct = isset($row['discount_pct']) ? (float)$row['discount_pct'] : 0;
-                $discAmount = isset($row['discount_amount']) ? (float)$row['discount_amount'] : ($unit * $qty * ($discPct / 100));
-                $taxPct = isset($row['tax_pct']) ? (float)$row['tax_pct'] : 0;
-                $base = $unit * $qty;
-                $taxAmount = ($base - $discAmount) * ($taxPct / 100);
-                $lineTotal = $base - $discAmount + $taxAmount; // sin landed cost aún
-
-                $item = PurchaseItem::create([
-                    'purchase_id' => $purchase->id,
-                    'product_variant_id' => $row['product_variant_id'],
-                    'qty_ordered' => $qty,
-                    'qty_received' => 0,
-                    'unit_cost' => $unit,
-                    'discount_pct' => $discPct,
-                    'discount_amount' => $discAmount,
-                    'tax_pct' => $taxPct,
-                    'tax_amount' => $taxAmount,
-                    'landed_cost_alloc' => 0,
-                    'line_total' => $lineTotal,
-                ]);
-
-                $subtotal += $base;
-                $discountTotal += $discAmount;
-                $taxTotal += $taxAmount;
-                $lineTotals[$item->id] = $lineTotal;
-            }
-
-            // Prorrateo de flete/otros costos
-            $landed = ($purchase->freight + $purchase->other_costs);
-            if ($landed > 0) {
-                $sumLineTotals = array_sum($lineTotals) ?: 1;
-                foreach ($lineTotals as $itemId => $lt) {
-                    $alloc = round(($lt / $sumLineTotals) * $landed, 4);
-                    PurchaseItem::where('id', $itemId)->update([
-                        'landed_cost_alloc' => $alloc,
-                        'line_total' => DB::raw('line_total + ' . $alloc),
-                    ]);
-                }
-            }
-
-            $grandTotal = $subtotal - $discountTotal + $taxTotal + $landed;
-
-            $purchase->update([
-                'subtotal' => $subtotal,
-                'discount_total' => $discountTotal,
-                'tax_total' => $taxTotal,
-                'grand_total' => $grandTotal,
-                'paid_total' => 0,
-                'balance_total' => $grandTotal,
-            ]);
-
-            return redirect()->route('inventory.purchases.index')->with('success', 'Compra creada (borrador).');
-        });
+        return redirect()->route('inventory.purchases.index')
+            ->with('success', 'Orden de compra creada exitosamente.');
     }
 
     public function approve(Purchase $purchase)
@@ -240,7 +169,12 @@ class PurchaseController extends Controller
     public function show(Purchase $purchase)
     {
         $purchase->load(['supplier', 'items.productVariant.product', 'payments']);
-        return inertia('inventory/purchases/show', ['purchase' => $purchase]);
+        return inertia('inventory/purchases/show', [
+            'purchase' => $purchase,
+            'can' => [
+                'update' => Auth::user()->can('update', $purchase),
+            ]
+        ]);
     }
 
 
@@ -331,5 +265,27 @@ class PurchaseController extends Controller
         }
 
         return Storage::disk($disk)->download($path, $at['name'] ?? basename($path));
+    }
+
+
+    public function edit(Purchase $purchase)
+    {
+        $this->authorize('update', $purchase);
+        // El Policy ya ha verificado que se puede editar.
+        $purchase->load('items.productVariant.product'); // Cargar relaciones necesarias
+
+        return Inertia::render('inventory/purchases/edit', [
+            'purchase'  => $purchase,
+            'suppliers' => Supplier::where('is_active', true)->get(['id', 'name']),
+        ]);
+    }
+
+    public function update(UpdatePurchaseRequest $request, Purchase $purchase)
+    {
+        $this->authorize('update', $purchase);
+        $this->updateService->update($purchase, $request->validated());
+
+        return redirect()->route('inventory.purchases.show', $purchase)
+            ->with('success', 'Compra actualizada exitosamente.');
     }
 }

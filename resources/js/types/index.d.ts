@@ -70,6 +70,7 @@ export interface Category {
 
 // Define la estructura de una Variante de Producto
 export interface ProductVariant {
+    product: any;
     stock: number;
     id: number;
     product_id: number; // Es bueno tenerla para referencias
@@ -241,3 +242,87 @@ export type PageProps<T extends Record<string, unknown> = Record<string, unknown
         user: User;
     };
 };
+
+export interface Attachment {
+    id: string;
+    name: string;
+    path: string;
+    size: number;
+    mime: string;
+    disk?: string;
+}
+
+export interface PurchaseItem {
+    product_variant_id: any;
+    id: number;
+    product: Product;
+    qty_ordered: number;
+    qty_received: number;
+    unit_cost: number;
+    discount_pct: number;
+    discount_amount: number;
+    tax_pct: number;
+    tax_amount: number;
+    landed_cost_alloc: number;
+    line_total: number;
+    product_variant: ProductVariant;
+}
+
+export type PurchaseStatus = 'draft' | 'approved' | 'partially_received' | 'received' | 'cancelled';
+
+export interface Purchase {
+    supplier_id: number;
+    id: number;
+    code: string;
+    status: PurchaseStatus;
+    supplier: Supplier;
+    invoice_number?: string | null;
+    invoice_date?: string | null;
+    currency: string;
+    exchange_rate: number;
+    subtotal: number;
+    discount_total: number;
+    tax_total: number;
+    freight: number;
+    other_costs: number;
+    grand_total: number;
+    paid_total: number;
+    balance_total: number;
+    items: PurchaseItem[];
+    attachments?: Attachment[];
+    notes?: string | null;
+}
+
+// ... (tus otros tipos)
+
+export interface PaginationLink {
+    url: string | null;
+    label: string;
+    active: boolean;
+}
+
+export interface Paginated<T> {
+    data: T[];
+    links: PaginationLink[];
+    current_page: number;
+    first_page_url: string;
+    from: number;
+    last_page: number;
+    last_page_url: string;
+    next_page_url: string | null;
+    path: string;
+    per_page: number;
+    prev_page_url: string | null;
+    to: number;
+    total: number;
+}
+
+export interface InventoryAdjustment {
+    id: number;
+    code: string;
+    reason: string;
+    adjustment_date: string;
+    items_count: number; // Este viene de withCount
+    user?: User; // Relación opcional
+    store: Store; // Relación requerida
+}

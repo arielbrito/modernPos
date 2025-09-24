@@ -113,7 +113,7 @@ export function CashCountPage({ mode, registerId, shiftId, denominations, active
     return (
         <div className="min-h-screen bg-background">
             {/* Header */}
-            <div className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+            <div className="border-b bg-card backdrop-blur-sm sticky top-0 z-10">
                 <div className="container mx-auto px-6 py-6">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
@@ -168,7 +168,7 @@ export function CashCountPage({ mode, registerId, shiftId, denominations, active
             </div>
 
             {/* Footer */}
-            <div className="border-t bg-white/80 backdrop-blur-sm sticky bottom-0">
+            <div className="border-t bg-background backdrop-blur-sm sticky bottom-0">
                 <form onSubmit={handleSubmit} className="container mx-auto px-6 py-6 grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
                     <div className="space-y-2">
                         <Label htmlFor="shift-note" className="font-medium">Nota adicional (opcional)</Label>

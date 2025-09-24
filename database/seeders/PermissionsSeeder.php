@@ -24,6 +24,7 @@ class PermissionsSeeder extends Seeder
             'purchases.receive',
             'purchases.pay',
             'purchases.cancel',
+            'purchases.update',
 
             //Customers
             'customers.view',
@@ -66,6 +67,49 @@ class PermissionsSeeder extends Seeder
             'dgii.sync.cancel',
             'dgii.sync.download',
 
+            //Gestion de productos
+            'products.view',
+            'products.create',
+            'products.update',
+            'products.delete',
+            'products.import',
+            'categories.view',
+            'categories.create',
+            'categories.update',
+            'categories.delete',
+
+            //Gestion de usuarios y roles
+            'users.view',
+            'users.create',
+            'users.update',
+            'users.delete',
+            'roles.view',
+            'roles.create',
+            'roles.update',
+            'roles.delete',
+            'permissions.view',
+            'permissions.create',
+            'permissions.update',
+            'permissions.delete',
+
+            //Gestion de tiendas
+            'stores.view',
+            'stores.create',
+            'stores.update',
+            'stores.delete',
+
+            //Gestion de proveedores
+            'suppliers.view',
+            'suppliers.create',
+            'suppliers.update',
+            'suppliers.delete',
+            //Ajustes de inventario
+            'inventory_adjustments.view',
+            'inventory_adjustments.create',
+            'inventory_adjustments.update',
+            'inventory_adjustments.delete',
+
+
         ];
 
 
@@ -91,6 +135,7 @@ class PermissionsSeeder extends Seeder
             'purchases.approve',
             'purchases.receive',
             'purchases.pay',
+            'purchases.update',
             //Customers
             'customers.view',
             'customers.create',
@@ -118,6 +163,14 @@ class PermissionsSeeder extends Seeder
             'customers.view',
             'sales.view',
             'sales.create',
+            'cash_shifts.view',
+            'cash_shifts.open',
+            'cash_shifts.operate',
+            'cash_shifts.close',
+            'cash_counts.view',
+            'cash_counts.create',
+            'cash_movements.view',
+            'cash_movements.create',
         ]);
 
         // (Opcional) si quieres garantizar que un usuario tenga el rol Super-Admin por ENV:

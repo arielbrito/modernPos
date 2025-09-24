@@ -24,6 +24,11 @@ class PurchasePolicy
     {
         return $u->can('purchases.approve') && $p->status === 'draft';
     }
+
+    public function update(User $u, Purchase $p): bool
+    {
+        return $u->can('purchases.update') && $p->status === 'draft';
+    }
     public function receive(User $u, Purchase $p): bool
     {
         return $u->can('purchases.receive') && in_array($p->status, ['approved', 'partially_received']);

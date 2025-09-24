@@ -154,6 +154,12 @@
     }
 }
 
+@import "react-day-picker/dist/style.css";
+
+.rdp-v6 {
+    display: flex;
+}
+
 /* Estilos específicos para componentes POS usando variables CSS estándar */
 @layer components {
     .pos-card {

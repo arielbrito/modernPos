@@ -31,7 +31,8 @@ import {
     ComputerIcon,
     UserCheck,
     FileText,
-    DollarSign
+    DollarSign,
+    PackageOpen
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -49,6 +50,7 @@ import registers from '@/routes/cash/registers';
 import cash, { cashbook } from '@/routes/cash';
 import sales from '@/routes/sales';
 import admin from '@/routes/admin';
+import adjustments from '@/routes/inventory/adjustments';
 
 /**
  * Configuración de navegación principal
@@ -136,6 +138,12 @@ const mainNavItems: NavItem[] = [
                 href: purchases.index.url(),
                 icon: ShoppingBag,
             },
+            {
+                title: 'Ajustes Inventario',
+                href: adjustments.index.url(),
+                icon: PackageOpen,
+            },
+
         ]
     },
     {

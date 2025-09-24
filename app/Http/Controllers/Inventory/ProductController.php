@@ -473,4 +473,38 @@ class ProductController extends Controller
             fclose($out);
         }, 200, $headers);
     }
+
+
+
+    public function search(Request $request)
+    {
+        $term = $request->query('term', '');
+        $storeId = session('active_store_id');
+
+        if (strlen($term) < 2 || !$storeId) {
+            return response()->json([]);
+        }
+
+        $products = Product::query()
+            ->where('is_active', true)
+            ->where(function ($query) use ($term) {
+                $query->where('name', 'ILIKE', "%{$term}%")
+                    ->orWhereHas('variants', function ($q) use ($term) {
+                        $q->where('sku', 'ILIKE', "%{$term}%");
+                    });
+            })
+            // Eager load variants y, para cada variante, suma la cantidad
+            // de la tabla 'inventory' que coincida con la tienda activa.
+            ->with(['variants' => function ($query) use ($storeId) {
+                $query->withSum([
+                    'inventory as stock_quantity' => fn($q) => $q->where('store_id', $storeId)
+                ], 'quantity');
+            }])
+            ->take(15)
+            ->get();
+
+        // El frontend espera que la respuesta sea directamente un array de productos
+        // que contienen sus variantes, justo como lo devuelve esta consulta.
+        return response()->json($products);
+    }
 }

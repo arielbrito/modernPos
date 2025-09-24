@@ -1,26 +1,30 @@
 import * as React from "react";
+import { Head, useForm, Link } from "@inertiajs/react";
+
+// --- LAYOUT, COMPONENTS & HOOKS ---
 import AppLayout from "@/layouts/app-layout";
-import { Head, useForm } from "@inertiajs/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, DollarSign, PackagePlus } from "lucide-react";
+import { Plus, Trash2, DollarSign, Package, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import type { BreadcrumbItem, Supplier, Product } from "@/types";
-import { SmartCombobox } from "./partials/smart-combobox"; // Asumiendo que este componente se adaptará para búsqueda asíncrona
 import { AsyncSmartCombobox, type ItemOption } from "./partials/AsyncSmartCombobox";
+import { SmartCombobox } from "./partials/smart-combobox";
+
+// --- UTILS, TYPES & ACTIONS ---
 import { money, purchaseTotals, toNum } from "@/utils/inventory";
 import PurchaseController from "@/actions/App/Http/Controllers/Inventory/PurchaseController";
+import type { BreadcrumbItem, Purchase, Supplier } from "@/types";
+import { Separator } from "@/components/ui/separator";
 
-// 1. Interfaces simplificadas
+// --- Interfaces ---
 interface PurchaseItemData {
-    id?: string; // Para el 'key' de React, no se envía al backend
+    id?: number | null; // <-- ID es importante para actualizar
     product_variant_id: number | null;
-    product_label?: string; // Solo para mostrar en la UI
+    product_label?: string;
     qty_ordered: number | string;
     unit_cost: number | string;
     discount_pct: number | string;
@@ -36,80 +40,61 @@ interface FormData {
     freight: number | string;
     other_costs: number | string;
     notes: string;
-    items: PurchaseItemData[]; // <-- El estado de los items ahora vive aquí
+    items: PurchaseItemData[];
 }
 
 interface Props {
+    purchase: Purchase;
     suppliers: Supplier[];
-    // Ya no necesitamos 'products' aquí, se buscarán asíncronamente
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: "Compras", href: PurchaseController.index.url() },
-    { title: "Nueva", href: PurchaseController.create.url() },
-];
-
-// Función helper para crear un nuevo item vacío
-function createEmptyItem(): PurchaseItemData {
-    return {
-        id: crypto.randomUUID(),
-        product_variant_id: null,
-        qty_ordered: 1,
-        unit_cost: 0,
-        discount_pct: 0,
-        tax_pct: 0,
-    };
-}
-
-export default function CreatePurchase({ suppliers }: Props) {
-    // 2. TODO el estado del formulario, incluyendo los items, se maneja con useForm
+export default function EditPurchase({ purchase, suppliers }: Props) {
     const form = useForm<FormData>({
-        supplier_id: null,
-        invoice_number: "",
-        invoice_date: new Date().toISOString().split('T')[0],
-        currency: "DOP",
-        exchange_rate: 1,
-        freight: 0,
-        other_costs: 0,
-        notes: "",
-        items: [createEmptyItem()],
+        supplier_id: purchase.supplier_id,
+        invoice_number: purchase.invoice_number || "",
+        invoice_date: purchase.invoice_date ? new Date(purchase.invoice_date).toISOString().split('T')[0] : "",
+        currency: purchase.currency,
+        exchange_rate: purchase.exchange_rate,
+        freight: purchase.freight,
+        other_costs: purchase.other_costs,
+        notes: purchase.notes || "",
+        items: purchase.items.map(item => ({
+            id: item.id,
+            product_variant_id: item.product_variant_id,
+            product_label: `${item.product_variant.product.name} (SKU: ${item.product_variant.sku})`,
+            qty_ordered: item.qty_ordered,
+            unit_cost: item.unit_cost,
+            discount_pct: item.discount_pct,
+            tax_pct: item.tax_pct,
+        })),
     });
 
-    // // Simplificamos la propagación de errores a los items
-    // const errors = form.errors as InertiaFormProps<FormData>['errors'];
+    // --- Lógica del formulario (casi idéntica a 'create') ---
 
     const supplierOpts: ItemOption[] = React.useMemo(() =>
         suppliers.map(s => ({ value: s.id, label: s.name })),
         [suppliers]
     );
 
-    // Los cálculos se mantienen igual, pero ahora leen de `form.data`
     const totals = React.useMemo(() =>
         purchaseTotals(form.data.items, form.data.freight, form.data.other_costs),
         [form.data.items, form.data.freight, form.data.other_costs]
     );
 
-    // 3. Lógica para manipular el array de items dentro del estado de useForm
     const handleItemUpdate = (idx: number, patch: Partial<PurchaseItemData>) => {
-        const newItems = form.data.items.map((item, i) => i === idx ? { ...item, ...patch } : item);
-        form.setData('items', newItems);
+        form.setData('items', form.data.items.map((item, i) => i === idx ? { ...item, ...patch } : item));
     };
 
     const handleProductChange = (idx: number, selectedOption: ItemOption | null) => {
-        if (!selectedOption) {
-            handleItemUpdate(idx, { product_variant_id: null, unit_cost: 0, product_label: '' });
-            return;
-        }
         handleItemUpdate(idx, {
-            product_variant_id: selectedOption.value as number, // <-- CORRECCIÓN: Usamos 'value'
-            product_label: selectedOption.label,
-            unit_cost: toNum(selectedOption.cost_price) || 0,
+            product_variant_id: selectedOption ? selectedOption.value as number : null,
+            product_label: selectedOption ? selectedOption.label : '',
+            unit_cost: selectedOption ? toNum(selectedOption.cost_price) || 0 : 0,
         });
     };
 
-
     const addItem = () => {
-        form.setData('items', [...form.data.items, createEmptyItem()]);
+        form.setData('items', [...form.data.items, { id: null, product_variant_id: null, qty_ordered: 1, unit_cost: 0, discount_pct: 0, tax_pct: 0 }]);
     };
 
     const removeItem = (idx: number) => {
@@ -120,52 +105,37 @@ export default function CreatePurchase({ suppliers }: Props) {
         form.setData('items', form.data.items.filter((_, i) => i !== idx));
     };
 
-    // 4. El submit ahora es mucho más simple. No hay validación manual.
-    // ... dentro de tu componente CreatePurchase
-
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        // 1. PRIMERO, validamos que haya al menos un item válido.
-        const validItems = form.data.items.filter(item =>
-            item.product_variant_id && toNum(item.qty_ordered) > 0
-        );
-
-        // 2. SI NO HAY NINGUNO, mostramos un error claro y detenemos el envío.
-        if (validItems.length === 0) {
-            toast.error("Error de validación", {
-                description: "Debes agregar al menos un producto con una cantidad válida antes de guardar.",
-            });
-            return; // Detiene la ejecución
-        }
-
-        // 3. SI HAY ITEMS VÁLIDOS, construimos el payload y lo enviamos.
         const payload = {
             ...form.data,
-            // Usamos la variable 'validItems' que ya calculamos
-            items: validItems.map(({ id, product_label, ...rest }) => rest),
+            items: form.data.items.filter(item => item.product_variant_id && toNum(item.qty_ordered) > 0),
         };
 
         form.transform(() => payload);
-        form.post(PurchaseController.store.url(), {
-            onSuccess: () => toast.success("Compra creada exitosamente"),
-            onError: (errs) => {
-                console.error("Errores de validación:", errs);
-                toast.error("Hay errores en el formulario. Por favor, revísalos.");
-            },
+        form.put(PurchaseController.update.url({ purchase: purchase.id }), {
+            onSuccess: () => toast.success("Compra actualizada exitosamente"),
+            onError: (errs) => toast.error("Hubo un error", { description: Object.values(errs).flat().join(" ") }),
         });
     };
 
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: "Compras", href: PurchaseController.index.url() },
+        { title: purchase.code, href: PurchaseController.show.url({ purchase: purchase.id }) },
+        { title: "Editar", href: "#" },
+    ];
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Nueva Compra" />
+            <Head title={`Editar Compra ${purchase.code}`} />
             <div className="mx-auto max-w-6xl p-4 md:p-6">
                 <form onSubmit={handleSubmit} className="grid gap-6">
                     {/* Header */}
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <PackagePlus className="h-5 w-5 text-primary" />
-                            <h1 className="text-2xl font-bold">Nueva Compra</h1>
+                            <Package className="h-5 w-5 text-primary" />
+                            <h1 className="text-2xl font-bold">Editar Compra</h1>
                         </div>
                         <Button
                             type="submit"
@@ -315,6 +285,7 @@ export default function CreatePurchase({ suppliers }: Props) {
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             </TableCell>
+
                                         </TableRow>
                                     ))}
                                 </TableBody>
