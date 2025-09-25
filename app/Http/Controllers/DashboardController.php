@@ -21,44 +21,65 @@ class DashboardController extends Controller
             ->whereDate('created_at', $today)
             ->selectRaw("
                 COUNT(*) as count,
-                COALESCE(SUM(grand_total), 0) as total_revenue,
-                COALESCE(AVG(grand_total), 0) as average_ticket
+                COALESCE(SUM(paid_total), 0) as total_revenue,
+                COALESCE(AVG(paid_total), 0) as average_ticket
             ")->first();
 
-        // --- COMPRAS ---
-        $purchasesStats = Purchase::where('store_id', $storeId)
+        // --- COMPRAS (CORRECCIÓN AQUÍ) ---
+        $purchasesStats = Purchase::query()
+            // Especificamos la tabla para el 'store_id'
+            ->where('purchases.store_id', $storeId)
+            ->leftJoin('purchase_returns', 'purchases.id', '=', 'purchase_returns.purchase_id')
             ->selectRaw("
-                COUNT(CASE WHEN status = 'draft' THEN 1 END) as draft_count,
-                COALESCE(SUM(CASE WHEN status IN ('partially_received', 'received') THEN balance_total ELSE 0 END), 0) as total_balance_due
+                COUNT(DISTINCT CASE WHEN purchases.status = 'draft' THEN purchases.id END) as draft_count,
+                COALESCE(SUM(
+                    CASE 
+                        WHEN purchases.status IN ('partially_received', 'received') 
+                        THEN purchases.grand_total - purchases.paid_total - COALESCE(purchase_returns.total_value, 0) 
+                        ELSE 0 
+                    END
+                ), 0) as total_balance_due
             ")->first();
+
 
         // --- INVENTARIO ---
         $lowStockVariants = ProductVariant::with('product')
-            ->whereHas('inventory', function ($query) use ($storeId) {
-                $query->where('store_id', $storeId)
-                    ->whereColumn('quantity', '<=', 'stock_alert_threshold');
+            ->where('is_active', true)
+            ->whereHas('product', fn($q) => $q->where('product_nature', 'stockable'))
+            // Condición A: El producto TIENE inventario, pero la cantidad es baja.
+            ->where(function ($query) use ($storeId) {
+                $query->whereHas('inventory', function ($subQuery) use ($storeId) {
+                    $subQuery->where('store_id', $storeId)
+                        ->whereColumn('quantity', '<=', 'stock_alert_threshold');
+                })
+                    // Condición B: O el producto simplemente NO TIENE NINGÚN registro de inventario en esa tienda.
+                    ->orWhereDoesntHave('inventory', function ($subQuery) use ($storeId) {
+                        $subQuery->where('store_id', $storeId);
+                    });
             })
+            // También cargamos la relación para poder mostrar la cantidad (que será 0 o null para los nuevos)
+            ->with(['inventory' => fn($q) => $q->where('store_id', $storeId)])
             ->limit(5)
             ->get();
 
-        // --- GRÁFICO DE VENTAS (ÚLTIMOS 7 DÍAS) ---
+        // --- GRÁFICO DE VENTAS ---
         $salesChartData = Sale::where('store_id', $storeId)
             ->where('created_at', '>=', now()->subDays(6)->startOfDay())
             ->groupBy('date')
             ->orderBy('date', 'asc')
             ->get([
                 DB::raw('DATE(created_at) as date'),
-                DB::raw('SUM(grand_total) as total')
+                DB::raw('SUM(paid_total) as total')
             ]);
 
-        return Inertia::render('Dashboard/Index', [
+        return Inertia::render('dashboard', [
             'stats' => [
                 'sales_today_revenue' => (float) $salesToday->total_revenue,
                 'sales_today_count' => (int) $salesToday->count,
                 'sales_today_average_ticket' => (float) $salesToday->average_ticket,
                 'purchases_draft_count' => (int) $purchasesStats->draft_count,
                 'purchases_total_due' => (float) $purchasesStats->total_balance_due,
-                'low_stock_items_count' => $lowStockVariants->count(), // O un count() más performante si son muchos
+                'low_stock_items_count' => $lowStockVariants->count(),
             ],
             'lowStockVariants' => $lowStockVariants,
             'salesChartData' => $salesChartData,

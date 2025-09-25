@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\StoreSessionController;
 use App\Http\Controllers\CRM\CustomerController;
 use App\Http\Controllers\CRM\DgiiLookupController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Fiscal\NcfApiController;
 use App\Http\Controllers\Fiscal\NcfSequenceController;
 use App\Http\Controllers\Notifications\NotificationController;
@@ -73,9 +74,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Este grupo protege el núcleo de tu aplicación.
     Route::middleware(EnsureStoreIsSelected::class)->group(function () {
 
-        Route::get('dashboard', function () {
-            return Inertia::render('dashboard');
-        })->name('dashboard');
+        Route::get('/dashboard', [DashboardController::class, 'index'])
+
+            ->name('dashboard');
 
         // Rutas del POS
         Route::get('/pos', [PosController::class, 'index'])->name('pos.index');

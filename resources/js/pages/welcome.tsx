@@ -3,7 +3,7 @@ import { dashboard, login, register } from '@/routes';
 import { type SharedData } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { motion } from 'framer-motion';
-import { Box, LogIn, UserPlus } from 'lucide-react';
+import { Box, LogIn, Share, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 // Componente para el Logo
@@ -17,15 +17,17 @@ const Logo = () => (
 );
 
 // Componente para la Navegación
-const AuthNav = ({ user }: { user: SharedData['auth']['user'] }) => (
+const AuthNav = ({ user }: { user: SharedData['auth']['user'] | null | undefined }) => (
     <nav className="flex items-center gap-2">
         {user ? (
+            // This part is for LOGGED-IN users
             <Button asChild>
-                <Link href={dashboard()}>Dashboard</Link>
+                <Link href={dashboard()}>Dashboard ({user.name})</Link>
             </Button>
         ) : (
+            // This part is for GUESTS
             <>
-                <Button asChild variant="ghost">
+                <Button asChild variant="default">
                     <Link href={login()}>
                         <LogIn className="mr-2 h-4 w-4" />
                         Iniciar Sesión
@@ -51,6 +53,8 @@ export default function Welcome() {
         show: { opacity: 1, y: 0, transition: { type: "spring" as const } },
     };
 
+    console.log();
+
     return (
         <>
             <Head title="Bienvenido a StoneRetail" />
@@ -66,7 +70,7 @@ export default function Welcome() {
                         <Logo />
                     </motion.div>
                     <motion.div variants={FADE_IN_ANIMATION_VARIANTS}>
-                        <AuthNav user={auth.user} />
+                        <AuthNav user={auth?.user} />
                     </motion.div>
                 </motion.header>
 
@@ -98,7 +102,7 @@ export default function Welcome() {
 
                         <motion.div variants={FADE_IN_ANIMATION_VARIANTS}>
                             <Button asChild size="lg" className="text-base font-bold">
-                                {auth.user ? <Link href={dashboard()}>Ir al Dashboard</Link> : <Link href={login()}>Comenzar Ahora</Link>}
+                                {auth?.user ? <Link href={dashboard()}>Ir al Dashboard</Link> : <Link href={login()}>Comenzar Ahora</Link>}
                             </Button>
                         </motion.div>
                     </motion.div>

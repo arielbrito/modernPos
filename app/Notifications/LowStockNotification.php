@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\MailMessage;
+use App\Models\Store;
 
 class LowStockNotification extends Notification implements ShouldQueue
 {
@@ -14,7 +15,8 @@ class LowStockNotification extends Notification implements ShouldQueue
 
     public function __construct(
         protected Collection $rows,
-        protected int $threshold
+        protected int $threshold,
+        protected ?Store $store = null
     ) {}
 
     public function via(object $notifiable): array
@@ -35,8 +37,10 @@ class LowStockNotification extends Notification implements ShouldQueue
             ];
         })->values();
 
+        $storeName = $this->store ? " en {$this->store->name}" : "";
+
         return [
-            'title'   => 'Stock bajo',
+            'title'   => 'Alerta de Stock Bajo' . $storeName,
             'message' => "Variantes con stock <= {$this->threshold}",
             'count'   => $this->rows->count(),
             'items'   => $sample,

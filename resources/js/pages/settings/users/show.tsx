@@ -96,8 +96,8 @@ const VerificationStatus = ({ verified, onResend, isLoading }: {
     isLoading: boolean;
 }) => (
     <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all duration-200 ${verified
-            ? 'bg-green-50 border-green-200 text-green-800'
-            : 'bg-yellow-50 border-yellow-200 text-yellow-800'
+        ? 'bg-green-50 border-green-200 text-green-800'
+        : 'bg-yellow-50 border-yellow-200 text-yellow-800'
         }`}>
         {verified ? (
             <>
@@ -204,7 +204,7 @@ export default function UserShow({ user }: Props) {
     const updatedAt = user.updated_at ? new Date(user.updated_at as any) : null;
 
     const resend = () => {
-        post(UserController.verificationSend.url({ user: user.id }), {
+        post(UserController.resendVerification.url({ user: user.id }), {
             preserveScroll: true,
             onSuccess: () => toast.success("Verificación reenviada correctamente"),
             onError: () => toast.error("Error al reenviar verificación"),

@@ -1,6 +1,5 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import * as React from 'react';
+import { usePage, Link } from '@inertiajs/react';
 import {
     Accordion,
     AccordionContent,
@@ -8,184 +7,219 @@ import {
     AccordionTrigger,
 } from '@/components/ui/accordion';
 import {
-    SidebarGroup,
     SidebarMenu,
-    SidebarMenuButton,
     SidebarMenuItem,
+    SidebarMenuButton,
     useSidebar
 } from '@/components/ui/sidebar';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { type NavItem } from '@/types';
-import { Link, usePage } from '@inertiajs/react';
-import { ChevronRight, Dot } from 'lucide-react';
+import { type NavItem, type SharedProps } from '@/types';
+import { Dot, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { buttonVariants } from './ui/button';
+
+// --- 1. LÓGICA DE PERMISOS ---
+function filterNavItems(items: NavItem[], userPermissions: Set<string>): NavItem[] {
+    return items
+        .map(item => ({ ...item }))
+        .filter(item => {
+            if (item.children) {
+                item.children = filterNavItems(item.children, userPermissions);
+                return item.children.length > 0 || !item.permission;
+            }
+            if (item.isSection) return true;
+            if (!item.permission) return true;
+
+            return userPermissions.has(item.permission);
+        });
+}
 
 export function NavMain({ items = [] }: { items: NavItem[] }) {
-    const page = usePage();
+    const page = usePage<SharedProps>();
+    const { auth } = page.props;
     const { open: sidebarOpen, isMobile } = useSidebar();
 
-    // Track which accordion items are open
-    const [openItems, setOpenItems] = React.useState<string[]>([]);
+    const userPermissions = React.useMemo(() => new Set(auth.permissions || []), [auth.permissions]);
+    const accessibleItems = React.useMemo(() => filterNavItems(items, userPermissions), [items, userPermissions]);
 
-    const isItemActive = (href: string | object | undefined): boolean => {
+    const isUrlActive = (href?: NavItem['href']): boolean => {
         if (!href) return false;
-        const url = typeof href === 'string' ? href : ('url' in href ? href.url as string : '');
+        const url = typeof href === 'string' ? href : (href as { url: string }).url;
         return page.url.startsWith(url);
     };
 
-    const isGroupActive = (children: NavItem[] = []): boolean => {
-        return children.some(child => child.href && isItemActive(child.href));
+    const defaultOpenItems = React.useMemo(() =>
+        accessibleItems
+            .filter(item => item.children?.some(child => isUrlActive(child.href)))
+            .map(item => item.title),
+        [accessibleItems, page.url]
+    );
+
+    // --- 2. SUB-COMPONENTES MEJORADOS ---
+
+    // Componente para mostrar badges de notificación
+    const NotificationBadge = ({ count }: { count?: number }) => {
+        if (!count || count === 0) return null;
+
+        return (
+            <Badge
+                variant="destructive"
+                className="h-5 min-w-[20px] px-1.5 text-xs font-medium animate-pulse"
+            >
+                {count > 99 ? '99+' : count}
+            </Badge>
+        );
     };
 
-    // Initialize open items based on active groups
-    React.useEffect(() => {
-        const activeGroups = items
-            .filter((item) => isGroupActive(item.children))
-            .map((item) => item.title);
-        setOpenItems(activeGroups);
-    }, [items, page.url]);
+    // Componente mejorado para botones de menú
+    const MenuButton = ({ item, isChild = false }: { item: NavItem, isChild?: boolean }) => {
+        const isActive = isUrlActive(item.href);
+        const hasNotifications = item.notificationCount && item.notificationCount > 0;
 
-    // Enhanced menu button with better collapsed state handling
-    const MenuButton = ({
-        item,
-        isChild = false,
-        isActive = false
-    }: {
-        item: NavItem;
-        isChild?: boolean;
-        isActive?: boolean;
-    }) => {
         const buttonContent = (
             <div className={cn(
-                "flex items-center gap-3 w-full",
+                "flex items-center gap-3 w-full transition-all duration-200",
                 !sidebarOpen && !isMobile && "justify-center"
             )}>
-                {item.icon && (
-                    <item.icon
-                        className={cn(
-                            "h-4 w-4 shrink-0",
-                            isActive && "text-primary",
-                            isChild && "h-3 w-3"
-                        )}
-                    />
-                )}
-                {(sidebarOpen || isMobile) && (
-                    <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                    {isChild ? (
+                        <Dot className={cn(
+                            "h-4 w-4 shrink-0 -ml-1 transition-colors",
+                            isActive && "text-primary"
+                        )} />
+                    ) : (
+                        item.icon && (
+                            <item.icon className={cn(
+                                "h-4 w-4 shrink-0 transition-colors",
+                                isActive && "text-primary",
+                                hasNotifications && "text-orange-500"
+                            )} />
+                        )
+                    )}
+
+                    {(sidebarOpen || isMobile) && (
                         <span className={cn(
-                            "text-sm font-medium truncate",
-                            isActive && "text-primary font-semibold",
-                            isChild && "text-xs"
+                            "truncate transition-colors font-medium",
+                            isActive && "text-primary font-semibold"
                         )}>
                             {item.title}
                         </span>
+                    )}
+                </div>
+
+                {/* Badges y estados a la derecha */}
+                {(sidebarOpen || isMobile) && (
+                    <div className="flex items-center gap-2 shrink-0">
                         {item.badge && (
                             <Badge
-                                variant={item.badge.variant || "secondary"}
-                                className="ml-auto h-5 px-1.5 text-xs"
+                                variant={item.badge.variant || 'secondary'}
+                                className="h-5 px-2 text-xs font-medium"
                             >
                                 {item.badge.text}
                             </Badge>
+                        )}
+                        <NotificationBadge count={item.notificationCount} />
+                        {item.isNew && (
+                            <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
                         )}
                     </div>
                 )}
             </div>
         );
 
-        // For collapsed sidebar, wrap single items in tooltip
-        if (!sidebarOpen && !isMobile && !isChild) {
+        // Modo colapsado: mostrar tooltip
+        if (!sidebarOpen && !isMobile) {
             return (
-                <TooltipProvider>
+                <TooltipProvider delayDuration={300}>
                     <Tooltip>
                         <TooltipTrigger asChild>
-                            <SidebarMenuButton
-                                asChild
-                                isActive={isActive}
+                            <Link
+                                href={item.href ?? '#'}
                                 className={cn(
-                                    "transition-all duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                                    isActive && "bg-sidebar-accent text-sidebar-accent-foreground border-r-2 border-primary",
-                                    !sidebarOpen && "justify-center px-2"
+                                    buttonVariants({
+                                        variant: isActive ? 'default' : 'ghost',
+                                        size: 'icon'
+                                    }),
+                                    "h-9 w-9 relative hover:scale-105 transition-all duration-200",
+                                    isActive && "shadow-md"
                                 )}
                             >
-                                <Link href={item.href ?? '#'} prefetch>
-                                    {buttonContent}
-                                </Link>
-                            </SidebarMenuButton>
+                                {item.icon && <item.icon className="h-4 w-4" />}
+                                {hasNotifications && (
+                                    <div className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full border-2 border-background animate-pulse" />
+                                )}
+                            </Link>
                         </TooltipTrigger>
                         <TooltipContent side="right" className="font-medium">
-                            {item.title}
-                            {item.badge && (
-                                <Badge
-                                    variant={item.badge.variant || "secondary"}
-                                    className="ml-2 h-4 px-1 text-xs"
-                                >
-                                    {item.badge.text}
-                                </Badge>
-                            )}
+                            <div className="flex items-center gap-2">
+                                {item.title}
+                                <NotificationBadge count={item.notificationCount} />
+                            </div>
                         </TooltipContent>
                     </Tooltip>
                 </TooltipProvider>
             );
         }
 
+        // Modo expandido
         return (
-            <SidebarMenuButton
-                asChild
-                isActive={isActive}
+            <Link
+                href={item.href ?? '#'}
                 className={cn(
-                    "transition-all duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                    isActive && "bg-sidebar-accent text-sidebar-accent-foreground border-r-2 border-primary",
-                    !sidebarOpen && !isMobile && "justify-center px-2"
+                    buttonVariants({ variant: 'ghost' }),
+                    "w-full justify-start h-9 transition-all duration-200 hover:scale-[1.02] hover:bg-accent",
+                    isActive && "bg-primary/10 text-primary border-r-2 border-primary shadow-sm",
+                    hasNotifications && "border-l-2 border-orange-500"
                 )}
             >
-                <Link href={item.href ?? '#'} prefetch>
-                    {buttonContent}
-                </Link>
-            </SidebarMenuButton>
+                {buttonContent}
+            </Link>
         );
     };
 
-    // Enhanced accordion trigger with better collapsed handling
-    const AccordionTriggerEnhanced = ({
-        item,
-        children
-    }: {
-        item: NavItem;
-        children: React.ReactNode;
-    }) => {
-        const isActive = isGroupActive(item.children);
+    // Componente para grupos con hijos
+    const MenuGroup = ({ item }: { item: NavItem }) => {
+        const isGroupActive = !!item.children?.some(child => isUrlActive(child.href));
+        const hasGroupNotifications = item.children?.some(child => child.notificationCount && child.notificationCount > 0);
 
+        // En modo colapsado, mostrar como tooltip con los hijos
         if (!sidebarOpen && !isMobile) {
-            // For collapsed sidebar, show only icon with tooltip
             return (
-                <TooltipProvider>
+                <TooltipProvider delayDuration={300}>
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <div className={cn(
-                                "flex h-9 w-9 items-center justify-center rounded-md transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                                isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
+                                buttonVariants({ variant: isGroupActive ? 'secondary' : 'ghost', size: 'icon' }),
+                                "h-9 w-9 relative hover:scale-105 transition-all duration-200 cursor-pointer",
+                                isGroupActive && "shadow-md"
                             )}>
                                 {item.icon && <item.icon className="h-4 w-4" />}
+                                {hasGroupNotifications && (
+                                    <div className="absolute -top-1 -right-1 h-3 w-3 bg-orange-500 rounded-full border-2 border-background animate-pulse" />
+                                )}
                             </div>
                         </TooltipTrigger>
-                        <TooltipContent side="right" className="font-medium">
-                            <div className="space-y-1">
-                                <div className="font-medium">{item.title}</div>
-                                {item.children && (
-                                    <div className="space-y-1">
-                                        {item.children.map((child) => (
-                                            <div
-                                                key={child.title}
-                                                className={cn(
-                                                    "text-xs text-muted-foreground",
-                                                    child.href && isItemActive(child.href) && "text-primary font-medium"
-                                                )}
-                                            >
-                                                {child.title}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                        <TooltipContent side="right" className="font-medium p-0">
+                            <div className="p-2 space-y-1">
+                                <div className="font-semibold text-sm mb-2 px-1">{item.title}</div>
+                                {item.children?.map((child) => {
+                                    const childActive = isUrlActive(child.href);
+                                    return (
+                                        <Link
+                                            key={child.title}
+                                            href={child.href ?? '#'}
+                                            className={cn(
+                                                "flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-accent transition-colors",
+                                                childActive && "bg-primary/10 text-primary font-medium"
+                                            )}
+                                        >
+                                            {child.icon && <child.icon className="h-3.5 w-3.5" />}
+                                            <span className="truncate">{child.title}</span>
+                                            <NotificationBadge count={child.notificationCount} />
+                                        </Link>
+                                    );
+                                })}
                             </div>
                         </TooltipContent>
                     </Tooltip>
@@ -193,99 +227,87 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
             );
         }
 
+        // Modo expandido (accordion normal)
         return (
-            <AccordionTrigger
-                className={cn(
-                    "hover:no-underline hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md px-2 py-1.5 transition-colors",
-                    isActive && "bg-sidebar-accent/50 text-sidebar-accent-foreground"
-                )}
-            >
-                <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-3">
+            <AccordionItem value={item.title} className="border-none">
+                <AccordionTrigger className={cn(
+                    "hover:no-underline hover:bg-accent rounded-md px-3 py-2 text-sm font-medium w-full justify-between transition-all duration-200 group",
+                    isGroupActive && "text-primary bg-primary/5",
+                    hasGroupNotifications && "border-l-2 border-orange-500"
+                )}>
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
                         {item.icon && (
                             <item.icon className={cn(
-                                "h-4 w-4 shrink-0",
-                                isActive && "text-primary"
+                                "h-4 w-4 shrink-0 transition-colors",
+                                isGroupActive && "text-primary",
+                                hasGroupNotifications && "text-orange-500"
                             )} />
                         )}
-                        <span className={cn(
-                            "text-sm font-medium",
-                            isActive && "text-primary font-semibold"
-                        )}>
-                            {item.title}
-                        </span>
+                        {(sidebarOpen || isMobile) && (
+                            <span className="truncate">{item.title}</span>
+                        )}
                     </div>
-                    {item.badge && (
-                        <Badge
-                            variant={item.badge.variant || "secondary"}
-                            className="h-5 px-1.5 text-xs"
-                        >
-                            {item.badge.text}
-                        </Badge>
+
+                    {(sidebarOpen || isMobile) && (
+                        <div className="flex items-center gap-2">
+                            {item.badge && (
+                                <Badge variant={item.badge.variant || 'secondary'} className="h-5 px-2 text-xs">
+                                    {item.badge.text}
+                                </Badge>
+                            )}
+                            {hasGroupNotifications && (
+                                <div className="h-2 w-2 bg-orange-500 rounded-full animate-pulse" />
+                            )}
+                            <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
+                        </div>
                     )}
-                </div>
-            </AccordionTrigger>
+                </AccordionTrigger>
+                <AccordionContent className="pt-1 pb-0">
+                    <SidebarMenu className="ml-4 pl-3 border-l border-border/30 space-y-0.5">
+                        {item.children?.map((child) => (
+                            <SidebarMenuItem key={child.title} className="p-0">
+                                <MenuButton item={child} isChild />
+                            </SidebarMenuItem>
+                        ))}
+                    </SidebarMenu>
+                </AccordionContent>
+            </AccordionItem>
         );
     };
 
+    // --- 3. RENDERIZADO PRINCIPAL ---
     return (
-        <SidebarGroup className="px-2 py-0">
-            <Accordion
-                type="multiple"
-                value={openItems}
-                onValueChange={setOpenItems}
-                className="w-full space-y-1"
-            >
-                {items.map((item) =>
-                    item.children && item.children.length > 0 ? (
-                        <AccordionItem
-                            value={item.title}
-                            key={item.title}
-                            className="border-none"
-                        >
-                            <AccordionTriggerEnhanced item={item}>
-                                {item.title}
-                            </AccordionTriggerEnhanced>
+        <TooltipProvider>
+            <Accordion type="multiple" defaultValue={defaultOpenItems} className="w-full space-y-1 px-2">
+                {accessibleItems.map((item) => {
+                    // Secciones
+                    if (item.isSection) {
+                        return (
+                            <h4
+                                key={item.title}
+                                className={cn(
+                                    "px-3 pt-4 pb-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase transition-all",
+                                    !sidebarOpen && !isMobile && "text-center"
+                                )}
+                            >
+                                {(sidebarOpen || isMobile) ? item.title : '•••'}
+                            </h4>
+                        );
+                    }
 
-                            {/* Only show content when sidebar is open or on mobile */}
-                            {(sidebarOpen || isMobile) && (
-                                <AccordionContent className="pb-1">
-                                    <SidebarMenu>
-                                        {item.children.map((child) => {
-                                            const isChildActive = child.href && isItemActive(child.href);
+                    // Grupos con hijos
+                    if (item.children?.length) {
+                        return <MenuGroup key={item.title} item={item} />;
+                    }
 
-                                            return (
-                                                <SidebarMenuItem key={child.title}>
-                                                    <div className={cn(
-                                                        "flex items-center",
-                                                        "ml-4 pl-4 border-l border-sidebar-border/50"
-                                                    )}>
-                                                        <Dot className="h-3 w-3 text-muted-foreground mr-1" />
-                                                        <MenuButton
-                                                            item={child}
-                                                            isChild={true}
-                                                            isActive={!!isChildActive}
-                                                        />
-                                                    </div>
-                                                </SidebarMenuItem>
-                                            );
-                                        })}
-                                    </SidebarMenu>
-                                </AccordionContent>
-                            )}
-                        </AccordionItem>
-                    ) : (
-                        <SidebarMenu key={item.title}>
-                            <SidebarMenuItem>
-                                <MenuButton
-                                    item={item}
-                                    isActive={item.href && isItemActive(item.href) || false}
-                                />
-                            </SidebarMenuItem>
-                        </SidebarMenu>
-                    ),
-                )}
+                    // Items simples
+                    return (
+                        <SidebarMenuItem key={item.title} className="p-0">
+                            <MenuButton item={item} />
+                        </SidebarMenuItem>
+                    );
+                })}
             </Accordion>
-        </SidebarGroup>
+        </TooltipProvider>
     );
 }

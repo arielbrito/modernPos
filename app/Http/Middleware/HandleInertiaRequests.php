@@ -47,26 +47,25 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'name' => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
-            'auth' => [
-                'user' => $request->user(),
-                'permissions' => [
-                    'user' => [
-                        'viewAny' => fn() => $request->user()?->can('viewAny', User::class) ?? false,
-                        'create'  => fn() => $request->user()?->can('create',  User::class) ?? false,
-                    ],
-                    'store' => [
-                        'viewAny' => fn() => $request->user()?->can('viewAny', Store::class) ?? false,
-                        'create'  => fn() => $request->user()?->can('create',  Store::class) ?? false,
-                    ],
-                ],
-                'stores_active' => fn() => $request->user()
-                    ? $request->user()->stores()
-                    ->select('stores.id', 'stores.name', 'stores.code', 'stores.logo', 'stores.is_active')
-                    ->where('stores.is_active', true)
-                    ->orderBy('stores.name')
-                    ->get()
-                    : [],
-            ],
+            'auth' => function () use ($request) {
+                $user = $request->user();
+                if (!$user) return null;
+
+                return [
+                    'user' => $user,
+                    // 1. Obtenemos TODOS los permisos del usuario de una sola vez.
+                    // Esto es mucho más eficiente que hacer múltiples 'can' checks.
+                    'permissions' => $user->getAllPermissions()->pluck('name'),
+
+                    // 2. Mantenemos tu lógica de tiendas activas.
+                    'stores_active' => $user->stores()
+                        // Seleccionamos explícitamente todas las columnas de la tabla 'stores'
+                        ->select('stores.*')
+                        ->where('is_active', true)
+                        ->orderBy('name')
+                        ->get(),
+                ];
+            },
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
 
             'flash' => [

@@ -56,6 +56,7 @@ export default function ProductIndexPage({ products, categories, suppliers, stor
     const productIds = useMemo(() => products.data.map(p => p.id), [products.data]);
     const selection = useProductSelection(productIds);
 
+
     // --- 2. ESTADO LOCAL DE LA UI ---
     const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 
@@ -140,6 +141,8 @@ export default function ProductIndexPage({ products, categories, suppliers, stor
                 productToDelete={actions.productToDelete}
                 onSuccess={() => selection.reset()}
             />
+
+
         </AppLayout>
     );
 }

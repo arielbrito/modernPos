@@ -1,9 +1,20 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { InertiaLinkProps } from '@inertiajs/react';
+import { InertiaLinkProps, type PageProps as InertiaPageProps } from '@inertiajs/react';
 import { LucideIcon } from 'lucide-react';
+
+export interface SharedProps {
+    auth: Auth;
+    // Añade aquí cualquier otra prop compartida globalmente, por ejemplo:
+    // active_store: Store | null;
+    // flash: { success: string | null; error: string | null; };
+
+    [key: string]: unknown;
+}
 
 export interface Auth {
     user: User;
+    permissions: string[]; // <-- El array de permisos que faltaba
+    stores_active: Store[];
 }
 
 export interface BreadcrumbItem {
@@ -22,11 +33,14 @@ export interface NavItem {
     icon?: LucideIcon | null;
     isActive?: boolean;
     children?: NavItem[];
+    notificationCount?: number;
     badge?: {
-        text: string | number;
+        text: string;
         variant?: 'default' | 'secondary' | 'destructive' | 'outline';
     };
     isSection?: boolean; // <-- AÑADIR ESTA LÍNEA
+    permission?: string; // <-- AÑADE ESTA LÍNEA
+    isNew?: boolean;
 }
 
 export interface SharedData {
@@ -41,7 +55,20 @@ export interface SharedData {
     };
     [key: string]: unknown;
 }
+export interface Permission {
+    id: number;
+    name: string;
+    group: string;
+}
 export interface Role {
+    id: number;
+    name: string;
+    permissions_count: number;
+    users_count: number;
+    permissions?: Permission[];
+}
+
+export interface Store {
     id: number;
     name: string;
 }
@@ -55,7 +82,8 @@ export interface User {
     created_at: string;
     updated_at: string;
     role_id: number;
-    role: Role;
+    roles?: Role[];
+    stores?: Store[];
     [key: string]: unknown; // This allows for additional properties...
 }
 
@@ -91,6 +119,7 @@ export interface ProductVariant {
     // Campos de imagen
     image_path: string | null;
     image_url: string | null; // El accesor puede devolver null si no hay imagen
+    stock_quantity?: number;
 }
 
 // Define la estructura del Producto principal
@@ -342,4 +371,8 @@ export interface InventoryAdjustment {
     items_count: number; // Este viene de withCount
     user?: User; // Relación opcional
     store: Store; // Relación requerida
+}
+
+declare module '@inertiajs/react' {
+    export interface PageProps extends InertiaPageProps, SharedProps {}
 }

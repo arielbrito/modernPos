@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { MoreVertical, Eye, Pencil, Trash2, ArrowUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ProductPreviewModal } from "./PreviewProduct"; // <-- 1. Importar el modal
 
 // Props que el componente necesita
 interface ProductTableProps {
@@ -37,6 +38,7 @@ const SortableHeader = ({ children, field, onSort, sortField, sortDirection }: a
 export function ProductTable({ products, selection, onEdit, onDelete, onSort, sortField, sortDirection }: ProductTableProps) {
     const formatCurrency = (value: number) => new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP' }).format(value);
     const getStockLevel = (p: Product) => Number(p.total_stock ?? 0);
+    const [previewProduct, setPreviewProduct] = React.useState<Product | null>(null);
 
     return (
         <div className="w-full overflow-x-auto border rounded-lg">
@@ -79,6 +81,10 @@ export function ProductTable({ products, selection, onEdit, onDelete, onSort, so
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
+                                            <DropdownMenuItem onClick={() => setPreviewProduct(product)}>
+                                                <Eye className="mr-2 h-4 w-4" />
+                                                Vista previa
+                                            </DropdownMenuItem>
                                             <DropdownMenuItem asChild><Link href={ProductController.show.url({ product: product.id })}><Eye className="mr-2 h-4 w-4" /> Ver Detalles</Link></DropdownMenuItem>
                                             <DropdownMenuItem onClick={() => onEdit(product)}><Pencil className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
                                             <DropdownMenuSeparator />
@@ -91,6 +97,14 @@ export function ProductTable({ products, selection, onEdit, onDelete, onSort, so
                     })}
                 </TableBody>
             </Table>
+            <ProductPreviewModal
+                product={previewProduct}
+                onOpenChange={(isOpen) => {
+                    if (!isOpen) {
+                        setPreviewProduct(null);
+                    }
+                }}
+            />
         </div>
     );
 }

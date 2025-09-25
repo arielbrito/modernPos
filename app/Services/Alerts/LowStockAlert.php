@@ -3,6 +3,8 @@
 namespace App\Services\Alerts;
 
 use App\Models\Inventory;
+use App\Models\ProductVariant;
+use App\Models\Store;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
@@ -13,32 +15,51 @@ class LowStockAlert
 {
     public function run(): void
     {
-        $threshold = (int) config('pos.alerts.low_stock_threshold', 3);
+        // 1. Iteramos sobre cada tienda activa en el sistema.
+        $stores = Store::where('is_active', true)->get();
 
-        $lowStockRows = Inventory::query()
-            ->with(['variant:id,sku,product_id,attributes', 'variant.product:id,name', 'store:id,code,name'])
-            ->where('quantity', '<=', $threshold)
-            ->lazy();
+        foreach ($stores as $store) {
+            $threshold = (int) config('pos.alerts.low_stock_threshold', 3);
 
-        if ($lowStockRows->isEmpty()) {
-            return;
-        }
+            // 2. Ejecutamos la consulta de stock bajo para CADA tienda.
+            $lowStockRows = ProductVariant::query()
+                ->with(['product:id,name'])
+                ->where('is_active', true)
+                ->whereHas('product', fn($q) => $q->where('product_nature', 'stockable'))
+                // Condición A: El producto TIENE inventario en esta tienda, pero la cantidad es baja.
+                ->where(function ($query) use ($store, $threshold) {
+                    $query->whereHas('inventory', function ($subQuery) use ($store, $threshold) {
+                        $subQuery->where('store_id', $store->id)
+                            ->where('quantity', '<=', $threshold);
+                    })
+                        // Condición B: O el producto simplemente NO TIENE NINGÚN registro de inventario en esta tienda.
+                        ->orWhereDoesntHave('inventory', function ($subQuery) use ($store) {
+                            $subQuery->where('store_id', $store->id);
+                        });
+                })
+                ->get(); // Usamos get() aquí, ya que la consulta es por tienda y no debería ser masiva.
 
-        $rowsByStore = $lowStockRows->groupBy('store_id');
+            if ($lowStockRows->isEmpty()) {
+                continue; // Si no hay nada que reportar en esta tienda, pasamos a la siguiente.
+            }
 
-        foreach ($rowsByStore as $storeId => $rowsInStore) {
-
-            $recipients = $this->recipientsForStore($storeId);
-
+            // 3. Buscamos los destinatarios para ESTA tienda.
+            $recipients = $this->recipientsForStore($store->id);
             if ($recipients->isEmpty()) {
                 continue;
             }
 
-            // --- LA SOLUCIÓN ESTÁ AQUÍ ---
-            // Convertimos la LazyCollection de esta tienda a una Collection normal.
-            Notification::send($recipients, new LowStockNotification($rowsInStore->collect(), $threshold));
+            // 4. Creamos una notificación específica para la tienda con sus productos.
+            $notification = new LowStockNotification(
+                $lowStockRows,
+                $threshold,
+                $store // Pasamos la tienda a la notificación para más contexto
+            );
+
+            Notification::send($recipients, $notification);
         }
     }
+
 
     /**
      * Obtiene los destinatarios de alertas para una tienda específica.

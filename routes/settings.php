@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
+use App\Http\Controllers\Settings\RoleController;
 use App\Http\Controllers\Settings\StoreController;
 use App\Http\Controllers\Settings\UserController;
 use Illuminate\Support\Facades\Route;
@@ -35,4 +36,6 @@ Route::middleware('auth')->group(function () {
 
     Route::resource('stores', StoreController::class)
         ->only(['index', 'show', 'create', 'store', 'destroy', 'edit', 'update']);
+
+    Route::resource('settings/roles', RoleController::class);
 });

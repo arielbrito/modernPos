@@ -55,6 +55,7 @@ import admin from '@/routes/admin';
 import adjustments from '@/routes/inventory/adjustments';
 import returns from '@/routes/sales/returns';
 import purchaseReturns from '@/routes/purchaseReturns';
+import roles from '@/routes/roles';
 
 /**
  * Configuración de navegación principal
@@ -90,6 +91,7 @@ const mainNavItems: NavItem[] = [
     {
         title: 'Ventas',
         icon: FileText,
+        permission: 'sales.view', // Ejemplo de permisos, ajustar según necesidades
         children: [
             { title: 'Listado de Ventas', href: sales.index.url(), icon: DollarSign },
             // { title: 'Devoluciones de Venta', href: returns.index.url(), icon: ArrowLeftRight },
@@ -99,19 +101,19 @@ const mainNavItems: NavItem[] = [
         title: 'Inventario',
         icon: Archive, // Icono más genérico para el módulo
         children: [
-            { title: 'Productos', href: products.index.url(), icon: ScanBarcode },
-            { title: 'Compras', href: purchases.index.url(), icon: ShoppingBag },
-            { title: 'Devoluciones (Compra)', href: purchaseReturns.index.url(), icon: ArrowLeftRight },
-            { title: 'Ajustes', href: adjustments.index.url(), icon: Package },
+            { title: 'Productos', href: products.index.url(), icon: ScanBarcode, permission: 'products.view' },
+            { title: 'Compras', href: purchases.index.url(), icon: ShoppingBag, permission: 'purchases.view' },
+            { title: 'Devoluciones (Compra)', href: purchaseReturns.index.url(), icon: ArrowLeftRight, permission: 'purchaseReturns.view' },
+            { title: 'Ajustes', href: adjustments.index.url(), icon: Package, permission: 'inventory_adjustments.view' },
         ],
     },
     {
         title: 'Catálogos',
         icon: BookOpen,
         children: [
-            { title: 'Clientes', href: customers.index.url(), icon: UserCheck },
-            { title: 'Proveedores', href: suppliers.index.url(), icon: Users },
-            { title: 'Categorías', href: categories.index.url(), icon: SquareStack },
+            { title: 'Clientes', href: customers.index.url(), icon: UserCheck, permission: 'customers.view' },
+            { title: 'Proveedores', href: suppliers.index.url(), icon: Users, permission: 'suppliers.view' },
+            { title: 'Categorías', href: categories.index.url(), icon: SquareStack, permission: 'categories.view' },
         ],
     },
     // {
@@ -128,18 +130,20 @@ const mainNavItems: NavItem[] = [
     {
         title: 'Sistema',
         icon: Settings,
+        permission: 'settings.view', // Solo usuarios con permiso de administración
         children: [
-            { title: 'Tiendas', href: stores.index.url(), icon: Store },
-            { title: 'Gestión de Cajas', href: registers.index.url(), icon: CircleDollarSign },
-            { title: 'Usuarios del Sistema', href: users.index.url(), icon: Users2 },
+            { title: 'Tiendas', href: stores.index.url(), icon: Store, permission: 'stores.view' },
+            { title: 'Gestión de Cajas', href: registers.index.url(), icon: CircleDollarSign, permission: 'registers.view' },
+            { title: 'Usuarios del Sistema', href: users.index.url(), icon: Users2, permission: 'users.view' },
+            { title: 'Roles', href: roles.index.url(), icon: Users2 },
         ],
     },
     {
         title: 'Fiscal',
         icon: Landmark,
         children: [
-            { title: 'Secuencias NCF', href: ncf.index.url() },
-            { title: 'Sincronización DGII', href: admin.dgiiSync.create.url() },
+            { title: 'Secuencias NCF', href: ncf.index.url(), icon: FileText, permission: 'ncf.view' },
+            { title: 'Sincronización DGII', href: admin.dgiiSync.create.url(), permission: 'dgii.sync.view' },
         ],
     },
 ];

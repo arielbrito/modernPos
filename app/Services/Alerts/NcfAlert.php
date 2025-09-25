@@ -22,7 +22,7 @@ class NcfAlert
             ->with(['store:id,code,name'])
             // Filtramos directamente en la base de datos
             ->whereRaw('COALESCE(end_number, 0) - COALESCE(next_number, 0) + 1 <= ?', [$threshold])
-            ->where('is_active', true) // Asumiendo que tienes una columna para secuencias activas
+            ->where('active', true) // Asumiendo que tienes una columna para secuencias activas
             ->get();
 
         if ($seqs->isEmpty()) return;
