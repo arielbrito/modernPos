@@ -17,6 +17,7 @@ import { StatsGrid } from './partials/StatsGrid';
 import { MovementsTable } from './partials/MovementsTable';
 import { PaymentMethodsSummary } from './partials/PaymentMethodsSummary';
 import { CashMovementModal } from './partials/cash-movement-modal';
+import cash from '@/routes/cash';
 
 // Props
 interface CashbookShowProps {
@@ -33,7 +34,7 @@ interface CashbookShowProps {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: "Cajas", href: RegisterController.index.url() },
+    { title: "Cajas", href: "" },
 ];
 
 export default function CashbookShow(props: CashbookShowProps) {

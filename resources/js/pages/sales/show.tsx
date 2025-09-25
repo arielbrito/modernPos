@@ -279,13 +279,13 @@ export default function SaleShow({ sale }: Props) {
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <Button variant="outline" onClick={handleBack}>
+                        <Button variant="default" onClick={handleBack}>
                             <ArrowLeft className="w-4 h-4 mr-2" /> Volver
                         </Button>
                         <Button onClick={handlePrint}>
                             <Printer className="w-4 h-4 mr-2" /> Imprimir
                         </Button>
-                        <Button variant="secondary" onClick={handleExportPDF}>
+                        <Button variant="default" onClick={handleExportPDF}>
                             <FileDown className="w-4 h-4 mr-2" /> PDF
                         </Button>
                     </div>

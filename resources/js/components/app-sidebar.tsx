@@ -32,7 +32,9 @@ import {
     UserCheck,
     FileText,
     DollarSign,
-    PackageOpen
+    PackageOpen,
+    Archive,
+    ArrowLeftRight
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -51,12 +53,19 @@ import cash, { cashbook } from '@/routes/cash';
 import sales from '@/routes/sales';
 import admin from '@/routes/admin';
 import adjustments from '@/routes/inventory/adjustments';
+import returns from '@/routes/sales/returns';
+import purchaseReturns from '@/routes/purchaseReturns';
 
 /**
  * Configuración de navegación principal
  * Organizada por módulos funcionales del sistema
  */
 const mainNavItems: NavItem[] = [
+    // --- 1. OPERACIONES ---
+    {
+        title: 'Operaciones',
+        isSection: true, // Prop opcional para renderizar como título de sección
+    },
     {
         title: 'Dashboard',
         href: dashboard(),
@@ -68,116 +77,73 @@ const mainNavItems: NavItem[] = [
         icon: ShoppingCart,
     },
     {
-        title: 'Gestión de Caja',
-        icon: ComputerIcon, // Icono más específico para caja
-        children: [
-            {
-                title: 'Caja Principal',
-                href: cashbook.url(),
-                icon: ComputerIcon,
-            },
-            {
-                title: 'Historial de Cierres',
-                href: cash.shifts.index.url(),
-                icon: CircleDollarSign,
-            },
-        ]
+        title: 'Caja Diaria',
+        href: cashbook.url(),
+        icon: ComputerIcon,
     },
+
+    // --- 2. GESTIÓN ---
     {
-        title: 'Clientes',
-        href: customers.index.url(),
-        icon: UserCheck, // Icono más específico para clientes
+        title: 'Gestión',
+        isSection: true,
     },
     {
         title: 'Ventas',
         icon: FileText,
         children: [
-            {
-                title: 'Listado de ventas',
-                href: sales.index.url(),
-                icon: DollarSign,
-            },
-            // {
-            //     title: 'Productos',
-            //     href: products.index.url(),
-            //     icon: ScanBarcode,
-            // },
-            // {
-            //     title: 'Proveedores',
-            //     href: suppliers.index.url(),
-            //     icon: Users,
-            // },
-            // {
-            //     title: 'Compras',
-            //     href: purchases.index.url(),
-            //     icon: ShoppingBag,
-            // },
-        ]
+            { title: 'Listado de Ventas', href: sales.index.url(), icon: DollarSign },
+            // { title: 'Devoluciones de Venta', href: returns.index.url(), icon: ArrowLeftRight },
+        ],
     },
     {
         title: 'Inventario',
-        icon: Package,
+        icon: Archive, // Icono más genérico para el módulo
         children: [
-            {
-                title: 'Categorías',
-                href: categories.index.url(),
-                icon: SquareStack,
-            },
-            {
-                title: 'Productos',
-                href: products.index.url(),
-                icon: ScanBarcode,
-            },
-            {
-                title: 'Proveedores',
-                href: suppliers.index.url(),
-                icon: Users,
-            },
-            {
-                title: 'Compras',
-                href: purchases.index.url(),
-                icon: ShoppingBag,
-            },
-            {
-                title: 'Ajustes Inventario',
-                href: adjustments.index.url(),
-                icon: PackageOpen,
-            },
-
-        ]
+            { title: 'Productos', href: products.index.url(), icon: ScanBarcode },
+            { title: 'Compras', href: purchases.index.url(), icon: ShoppingBag },
+            { title: 'Devoluciones (Compra)', href: purchaseReturns.index.url(), icon: ArrowLeftRight },
+            { title: 'Ajustes', href: adjustments.index.url(), icon: Package },
+        ],
     },
     {
+        title: 'Catálogos',
+        icon: BookOpen,
+        children: [
+            { title: 'Clientes', href: customers.index.url(), icon: UserCheck },
+            { title: 'Proveedores', href: suppliers.index.url(), icon: Users },
+            { title: 'Categorías', href: categories.index.url(), icon: SquareStack },
+        ],
+    },
+    // {
+    //     title: 'Reportes',
+    //     href: '#', // Futuro
+    //     icon: Activity,
+    // },
+
+    // --- 3. CONFIGURACIÓN ---
+    {
         title: 'Configuración',
+        isSection: true,
+    },
+    {
+        title: 'Sistema',
         icon: Settings,
         children: [
-            {
-                title: 'Tiendas',
-                href: stores.index.url(),
-                icon: Store,
-            },
-            {
-                title: 'Usuarios del Sistema',
-                href: users.index.url(),
-                icon: Users2,
-            },
-            {
-                title: 'Sincronizacion DGII',
-                href: admin.dgiiSync.create.url(),
-                icon: Landmark,
-            },
-            {
-                title: 'Secuencias NCF',
-                href: ncf.index.url(),
-                icon: Landmark,
-            },
-            {
-                title: 'Cajas Registradoras',
-                href: registers.index.url(),
-                icon: CircleDollarSign,
-            },
-        ]
+            { title: 'Tiendas', href: stores.index.url(), icon: Store },
+            { title: 'Gestión de Cajas', href: registers.index.url(), icon: CircleDollarSign },
+            { title: 'Usuarios del Sistema', href: users.index.url(), icon: Users2 },
+        ],
+    },
+    {
+        title: 'Fiscal',
+        icon: Landmark,
+        children: [
+            { title: 'Secuencias NCF', href: ncf.index.url() },
+            { title: 'Sincronización DGII', href: admin.dgiiSync.create.url() },
+        ],
     },
 ];
+
 
 /**
  * Enlaces del pie de página con recursos externos

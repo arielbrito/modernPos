@@ -15,23 +15,15 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $this->call([
-            PermissionsSeeder::class,
-            NcfSequencesSeeder::class,
-            DefaultCustomersSeeder::class,
-            CategorySeeder::class,
-            SupplierSeeder::class,
-            ProductSeeder::class,
-            CurrencySeeder::class,
-            CashDenominationSeeder::class,
-            RegisterSeeder::class,
-        ]);
+
 
         // 2. Crear una tienda principal
         $mainStore = Store::firstOrCreate(
             ['code' => 'MAIN'],
             ['name' => 'The Coffee Stop', 'rnc' => '00100000000', 'is_active' => true]
         );
+
+        $this->call(PermissionsSeeder::class);
 
         // 3. Crear el usuario Super-Admin
         $superAdmin = User::firstOrCreate(
@@ -57,6 +49,15 @@ class DatabaseSeeder extends Seeder
 
 
         // 1. Ejecutar el seeder de roles y permisos
-
+        $this->call([
+            NcfSequencesSeeder::class,
+            DefaultCustomersSeeder::class,
+            CategorySeeder::class,
+            SupplierSeeder::class,
+            ProductSeeder::class,
+            CurrencySeeder::class,
+            CashDenominationSeeder::class,
+            RegisterSeeder::class,
+        ]);
     }
 }

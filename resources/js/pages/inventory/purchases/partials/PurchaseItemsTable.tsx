@@ -6,23 +6,27 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { CheckCircle, PackageCheck, XCircle, Pencil } from "lucide-react";
 import { ReceiveModal } from "./receive-modal";
 import { PaymentModal } from "./payment-modal";
-import type { PurchaseItem, PurchaseStatus } from "@/types";
+import type { PurchaseItem, PurchaseStatus, Purchase } from "@/types";
 import { money, toNum } from "@/utils/inventory";
 import { Link } from "@inertiajs/react";
 import PurchaseController from "@/actions/App/Http/Controllers/Inventory/PurchaseController";
+import { ReturnModal } from "./ReturnModal";
 
 interface Props {
-    items: PurchaseItem[];
+
     permissions: { [key: string]: boolean };
     actions: { [key: string]: () => void };
     pendingItemsList: any[];
-    purchaseId: number;
+
     balanceTotal: number;
-    status: PurchaseStatus; // <-- AÑADIR ESTA PROP
+
     canUpdate: boolean;
+    purchase: Purchase;
 }
 
-export function PurchaseItemsTable({ items, permissions, actions, pendingItemsList, purchaseId, balanceTotal, canUpdate, status }: Props) {
+export function PurchaseItemsTable({ permissions, actions, pendingItemsList, balanceTotal, canUpdate, purchase }: Props) {
+    const { items, status, id: purchaseId } = purchase;
+    const canReturnItems = ['partially_received', 'received'].includes(status);
     return (
         <Card>
             <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -39,6 +43,7 @@ export function PurchaseItemsTable({ items, permissions, actions, pendingItemsLi
                             </Link>
                         </Button>
                     )}
+                    {canReturnItems && <ReturnModal purchase={purchase} />}
                     {permissions.canBeCancelled && (
                         <AlertDialog>
                             <AlertDialogTrigger asChild><Button variant="destructive" className="gap-2"><XCircle className="h-4 w-4" /> Cancelar Compra</Button></AlertDialogTrigger>

@@ -71,4 +71,16 @@ class Purchase extends Model
     {
         return $this->belongsTo(Store::class);
     }
+
+    public function returns(): HasMany
+    {
+        return $this->hasMany(PurchaseReturn::class);
+    }
+
+    protected function trueBalance(): Attribute
+    {
+        return Attribute::get(
+            fn() => (float)$this->grand_total - (float)$this->paid_total - (float)$this->returns_total
+        );
+    }
 }

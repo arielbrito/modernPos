@@ -13,6 +13,7 @@ import { FinancialSummaryCard } from "./partials/FinancialSummaryCard";
 import { AttachmentsCard } from "./partials/AttachmentsCard";
 import { PurchaseItemsTable } from "./partials/PurchaseItemsTable";
 import { PurchaseAlerts } from "./partials/PurchaseAlerts ";
+import { PurchaseReturnsCard } from "./partials/PurchaseReturnsCard";
 
 // --- TYPES ---
 import type { Purchase } from "@/types";
@@ -58,15 +59,13 @@ export default function ShowPurchase({ purchase, can }: Props) {
                 </div>
 
                 <PurchaseItemsTable
-                    items={purchase.items}
+                    purchase={purchase}
                     permissions={permissions}
                     actions={actions}
                     pendingItemsList={pendingItemsList}
-                    purchaseId={purchase.id}
                     balanceTotal={purchase.balance_total}
-                    status={purchase.status} // <-- AÑADIR ESTA LÍNEA
-                    canUpdate={can.update}
-                />
+                    canUpdate={can.update} />
+                <PurchaseReturnsCard returns={purchase.returns || []} />
 
                 <PurchaseAlerts
                     purchase={purchase}

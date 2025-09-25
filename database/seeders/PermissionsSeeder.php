@@ -109,6 +109,17 @@ class PermissionsSeeder extends Seeder
             'inventory_adjustments.update',
             'inventory_adjustments.delete',
 
+            //devoluciones de compras
+            'purchase_returns.view',
+            'purchase_returns.create',
+            'purchase_returns.approve',
+
+            //devoluciones de ventas
+            'sales_returns.view',
+            'sales_returns.create',
+            'sales_returns.approve',
+
+
 
         ];
 

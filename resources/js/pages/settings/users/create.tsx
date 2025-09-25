@@ -24,15 +24,15 @@ export default function Create({ roles, stores }: Props) {
 
             <div className="container mx-auto px-4 py-6 space-y-6">
                 {/* Header Premium */}
-                <div className="relative overflow-hidden rounded-xl border bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 p-6">
+                <div className="relative overflow-hidden rounded-xl border bg-gradient-to-r from-chart-5 via-accemt to-chart-1 p-6">
                     <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div className="flex items-center gap-4">
                             <div className="p-3 rounded-xl bg-blue-100 shadow-sm">
                                 <UserPlus className="h-8 w-8 text-blue-600" />
                             </div>
                             <div>
-                                <h1 className="text-3xl font-bold text-gray-900">Crear Nuevo Usuario</h1>
-                                <p className="text-gray-600 mt-1">
+                                <h1 className="text-3xl font-bold text-shadow-accent-foreground">Crear Nuevo Usuario</h1>
+                                <p className="text-sidebar-accent-foreground mt-1">
                                     Agrega un nuevo miembro al equipo con roles y permisos específicos
                                 </p>
                             </div>
@@ -53,39 +53,39 @@ export default function Create({ roles, stores }: Props) {
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <Card className="border-blue-200 bg-blue-50/50">
+                    <Card className="border-blue-200 bg-background/35">
                         <CardContent className="p-4 text-center">
-                            <Users className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-                            <div className="text-2xl font-bold text-blue-900">
+                            <Users className="h-8 w-8 text-secondary-foreground mx-auto mb-2" />
+                            <div className="text-2xl font-bold text-blue-900 dark:text-secondary-foreground">
                                 {roles.length}
                             </div>
-                            <div className="text-sm text-blue-600">
+                            <div className="text-sm text-secondary-foreground">
                                 Roles Disponibles
                             </div>
                         </CardContent>
                     </Card>
 
-                    <Card className="border-green-200 bg-green-50/50">
+                    <Card className="border-stoneretail-primary-dark bg-primary/10">
                         <CardContent className="p-4 text-center">
-                            <UserPlus className="h-8 w-8 text-green-600 mx-auto mb-2" />
-                            <div className="text-2xl font-bold text-green-900">
+                            <UserPlus className="h-8 w-8 text-stoneretail-primary-dark mx-auto mb-2" />
+                            <div className="text-2xl font-bold text-stoneretail-primary-dark">
                                 {stores.length}
                             </div>
-                            <div className="text-sm text-green-600">
+                            <div className="text-sm text-stoneretail-primary-dark">
                                 Tiendas Disponibles
                             </div>
                         </CardContent>
                     </Card>
 
-                    <Card className="border-purple-200 bg-purple-50/50">
+                    <Card className="border-purple-200 bg-foreground/5">
                         <CardContent className="p-4 text-center">
                             <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
                                 <span className="text-purple-600 font-bold text-sm">?</span>
                             </div>
-                            <div className="text-2xl font-bold text-purple-900">
+                            <div className="text-2xl font-bold text-secondary-foreground">
                                 Nuevo
                             </div>
-                            <div className="text-sm text-purple-600">
+                            <div className="text-sm text-secondary-foreground">
                                 Usuario a Crear
                             </div>
                         </CardContent>

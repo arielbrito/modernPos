@@ -26,6 +26,7 @@ export interface NavItem {
         text: string | number;
         variant?: 'default' | 'secondary' | 'destructive' | 'outline';
     };
+    isSection?: boolean; // <-- AÑADIR ESTA LÍNEA
 }
 
 export interface SharedData {
@@ -270,6 +271,21 @@ export interface PurchaseItem {
 
 export type PurchaseStatus = 'draft' | 'approved' | 'partially_received' | 'received' | 'cancelled';
 
+export interface PurchaseReturn {
+    purchase_id: number;
+    id: number;
+    code: string;
+    return_date: string;
+    total_value: number;
+    user?: {
+        // El usuario puede ser nulo si fue eliminado
+        id: number;
+        name: string;
+    };
+    purchase?: Purchase; // Relación opcional
+    // Añade aquí cualquier otro campo que necesites en el futuro
+}
+
 export interface Purchase {
     supplier_id: number;
     id: number;
@@ -291,6 +307,7 @@ export interface Purchase {
     items: PurchaseItem[];
     attachments?: Attachment[];
     notes?: string | null;
+    returns?: PurchaseReturn[];
 }
 
 // ... (tus otros tipos)

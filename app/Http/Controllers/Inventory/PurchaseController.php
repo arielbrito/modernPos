@@ -44,6 +44,7 @@ class PurchaseController extends Controller
         $purchases = Purchase::query()
             // Cargamos la relación con el proveedor para evitar problemas N+1
             ->with('supplier')
+            ->withSum('returns as returns_total', 'total_value')
             // Aplicamos el filtro de búsqueda solo si existe en la solicitud
             ->when($request->input('search'), function ($query, $search) {
                 $query->where(function ($q) use ($search) {
@@ -65,7 +66,7 @@ class PurchaseController extends Controller
         return inertia('inventory/purchases/index', [
             'compras' => $purchases,
             // Pasamos los filtros de vuelta a la vista para mantener el estado del input
-            'filters' => $filters,
+            'filters' => $request->only(['search', 'status'])
         ]);
     }
 
@@ -168,7 +169,12 @@ class PurchaseController extends Controller
      */
     public function show(Purchase $purchase)
     {
-        $purchase->load(['supplier', 'items.productVariant.product', 'payments']);
+        $purchase->load([
+            'supplier',
+            'items.productVariant.product',
+            'payments',
+            'returns.user:id,name' // Cargamos las devoluciones y el usuario que la hizo
+        ]);
         return inertia('inventory/purchases/show', [
             'purchase' => $purchase,
             'can' => [

@@ -423,7 +423,7 @@ export default function UserForm({ user, roles, stores }: UserFormProps) {
                                         key={store.id}
                                         className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer ${isSelected
                                             ? 'bg-green-50 border-green-200 shadow-sm'
-                                            : 'bg-white hover:bg-muted/50 border-muted'
+                                            : 'bg-background/25 hover:bg-accent/50 border-muted'
                                             }`}
                                     >
                                         {/* 2. El manejador de eventos ahora está *únicamente* en el Checkbox.

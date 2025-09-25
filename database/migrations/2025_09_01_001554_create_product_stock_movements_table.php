@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('product_variant_id')->constrained()->cascadeOnDelete();
             $table->foreignId('store_id')->constrained()->cascadeOnDelete();
-            $table->enum('type', ['purchase_entry', 'sale_exit', 'adjustment_in', 'adjustment_out']);
+            $table->enum('type', ['purchase_entry', 'sale_exit', 'adjustment_in', 'adjustment_out', 'purchase_return_exit', 'sale_return_entry']);
             $table->decimal('quantity', 12, 2);
             $table->decimal('unit_price', 14, 4);
             $table->decimal('subtotal', 14, 2);

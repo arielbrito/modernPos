@@ -204,7 +204,7 @@ export default function SalesIndex() {
                 {/* Summary Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                     <Card>
-                        <CardContent className="p-4">
+                        <CardContent className="p-4 ">
                             <div className="flex items-center space-x-2">
                                 <FileText className="h-4 w-4 text-blue-600" />
                                 <div>
@@ -364,7 +364,7 @@ export default function SalesIndex() {
                     <CardContent className="p-0">
                         <div className="overflow-x-auto">
                             <table className="w-full">
-                                <thead className="bg-gray-50 border-b dark:bg-slate-900">
+                                <thead className=" border-b ">
                                     <tr>
                                         <th className="text-left p-4 font-semibold text-gray-700  dark:text-slate-50">Fecha</th>
                                         <th className="text-left p-4 font-semibold text-gray-700  dark:text-slate-50">Número</th>
@@ -377,7 +377,7 @@ export default function SalesIndex() {
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
                                     {rows.map((sale) => (
-                                        <tr key={sale.id} className="hover:bg-gray-50 transition-colors dark:hover:bg-gray-600">
+                                        <tr key={sale.id} className="hover:bg-card-foreground/10">
                                             <td className="p-4">
                                                 <div className="flex items-center space-x-2">
                                                     <Calendar className="h-4 w-4 text-gray-400" />

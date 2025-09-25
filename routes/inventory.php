@@ -5,6 +5,7 @@ use App\Http\Controllers\Inventory\InventoryAdjustmentController;
 use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\Inventory\ProductStockController;
 use App\Http\Controllers\Inventory\PurchaseController;
+use App\Http\Controllers\Inventory\PurchaseReturnController;
 use App\Http\Controllers\Inventory\SupplierController;
 use Illuminate\Support\Facades\Route;
 
@@ -75,6 +76,8 @@ Route::middleware(['auth'])->prefix('inventory')->name('inventory.')->group(func
                 Route::post('/receive', 'receive')->name('receive');
                 Route::post('/cancel', 'cancel')->name('cancel');
 
+                Route::post('/returns', [PurchaseReturnController::class, 'store'])->name('returns.store')->middleware('permission:purchase_returns.create');
+
                 // Pagos de la compra
                 Route::post('/payments', 'storePayment')->name('payments.store');
 
@@ -86,6 +89,14 @@ Route::middleware(['auth'])->prefix('inventory')->name('inventory.')->group(func
                 });
             });
         });
+});
+
+//Rutas de devoluciones de compra
+Route::controller(PurchaseReturnController::class)->prefix('purchase-returns')->name('purchaseReturns.')->group(function () {
+    Route::get('/', 'index')->name('index')->middleware('permission:purchase_returns.view');
+    // Route::get('/{purchaseReturn}', 'show')->name('show');
+    // Route::post('/{purchaseReturn}/approve', 'approve')->name('approve');
+    // Route::post('/{purchaseReturn}/cancel', 'cancel')->name('cancel');
 });
 
 // Rutas para Ajustes de Inventario
