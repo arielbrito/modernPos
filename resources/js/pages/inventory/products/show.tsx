@@ -95,7 +95,7 @@ type StockSummary = {
 type Movement = {
     id: number;
     date: string;
-    type: 'purchase_entry' | 'sale_exit' | 'adjustment_in' | 'adjustment_out';
+    type: 'purchase_entry' | 'sale_exit' | 'adjustment_in' | 'adjustment_out' | 'purchase_return_exit' | 'sale_return_entry';
     quantity: number | string;
     unit_price: number | string;
     subtotal: number | string;
@@ -124,6 +124,8 @@ const typeLabel = {
     sale_exit: 'Salida (Venta)',
     adjustment_in: 'Ajuste +',
     adjustment_out: 'Ajuste −',
+    purchase_return_exit: 'Salida (Devolución Compra)',
+    sale_return_entry: 'Entrada (Devolución Venta)',
 } as const;
 
 const typeTone = {
@@ -131,6 +133,8 @@ const typeTone = {
     adjustment_in: 'bg-blue-100 text-blue-700 border-blue-200',
     sale_exit: 'bg-orange-100 text-orange-700 border-orange-200',
     adjustment_out: 'bg-rose-100 text-rose-700 border-rose-200',
+    purchase_return_exit: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+    sale_return_entry: 'bg-lime-100 text-lime-700 border-lime-200',
 } as const;
 
 const typeIcons = {
@@ -138,6 +142,8 @@ const typeIcons = {
     adjustment_in: TrendingUp,
     sale_exit: Package,
     adjustment_out: TrendingDown,
+    purchase_return_exit: ArrowLeft,
+    sale_return_entry: ExternalLink,
 } as const;
 
 // Skeleton Components
