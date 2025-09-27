@@ -22,7 +22,8 @@ import {
     ArrowRightLeft,
     Calculator,
     Shield,
-    Star
+    Star,
+    UserCheck
 } from 'lucide-react';
 
 import { JSX } from 'react/jsx-runtime';
@@ -36,9 +37,14 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 
+
+
+import { Customer } from '@/types/index';
+
+
 // --- TIPOS Y METADATOS ---
 
-type Method = 'cash' | 'card' | 'transfer' | 'other';
+type Method = 'cash' | 'card' | 'transfer' | 'other' | 'credit';
 
 export type UIPayment = {
     method: Method;
@@ -63,6 +69,8 @@ type PaymentDialogProps = {
     defaultFx?: Record<string, number>;
     onSubmit: (payments: UIPayment[], totalChange: number) => void;
     isProcessing?: boolean;
+    customer: Customer | null; // Pass the selected customer
+    onCreditSale: () => void;
 };
 
 const methodMeta: Record<Method, { label: string; icon: JSX.Element; color: string; bgColor: string; hoverColor: string }> = {
@@ -94,7 +102,15 @@ const methodMeta: Record<Method, { label: string; icon: JSX.Element; color: stri
         bgColor: 'bg-slate-100 dark:bg-slate-700',
         hoverColor: 'hover:bg-slate-200 dark:hover:bg-slate-600'
     },
+    credit: {
+        label: 'Crédito',
+        icon: <UserCheck className="w-5 h-5" />,
+        color: 'text-amber-600',
+        bgColor: 'bg-amber-100 dark:bg-amber-900/30',
+        hoverColor: 'hover:bg-amber-200 dark:hover:bg-amber-800/40'
+    }
 };
+
 
 // --- SUB-COMPONENTES MEJORADOS ---
 
@@ -215,7 +231,7 @@ const PaymentSummary = ({ payments, onRemove, saleCurrency, toSaleCcy }: any) =>
 // --- COMPONENTE PRINCIPAL ---
 
 export function PaymentDialog({
-    isOpen, setIsOpen, total, saleCurrency, currencies, defaultFx = {}, onSubmit, isProcessing = false,
+    isOpen, setIsOpen, total, saleCurrency, currencies, defaultFx = {}, onSubmit, isProcessing = false, customer, onCreditSale
 }: PaymentDialogProps) {
 
     const [payments, setPayments] = useState<UIPayment[]>([]);
@@ -229,6 +245,8 @@ export function PaymentDialog({
     const [bankName, setBankName] = useState<string>('');
     const [cardBrand, setCardBrand] = useState<string>('');
     const [cardLast4, setCardLast4] = useState<string>('');
+
+
 
     const toSaleCcy = useCallback((amt: number, ccy: string, fxRate?: number) =>
         ccy === saleCurrency ? amt : (fxRate ?? defaultFx[ccy] ?? 1) * amt,
@@ -322,6 +340,10 @@ export function PaymentDialog({
     const removePayment = (idx: number) => {
         setPayments(prev => prev.filter((_, i) => i !== idx));
     };
+
+    const canSellOnCredit = useMemo(() => {
+        return customer && customer.allow_credit;
+    }, [customer]);
 
     const confirm = () => {
         if (!isComplete) return;
@@ -583,6 +605,8 @@ export function PaymentDialog({
                                         />
                                     </div>
                                 )}
+
+
                             </CardContent>
                         </Card>
 
@@ -642,6 +666,22 @@ export function PaymentDialog({
                                     <div>Total: <span className="font-semibold text-primary">{total.toFixed(2)} {saleCurrency}</span></div>
                                 </div>
                             </div>
+                            {canSellOnCredit ? (
+                                <Button
+                                    onClick={onCreditSale}
+                                    disabled={isProcessing}
+                                    className="w-full sm:w-auto min-w-[200px] h-16 text-xl font-bold rounded-2xl bg-blue-600 hover:bg-blue-700 text-white shadow-lg ..."
+                                >
+                                    <UserCheck className="w-6 h-6 mr-3" />
+                                    Vender a Crédito
+                                </Button>
+                            ) : (
+                                // Optionally, show a disabled button with a tooltip
+                                <Button disabled className="w-full sm:w-auto min-w-[200px] h-16 ...">
+                                    Vender a Crédito
+                                    <span className="text-xs font-normal ml-2">(Seleccione cliente)</span>
+                                </Button>
+                            )}
 
                             {/* Botón confirmar mejorado */}
                             <Button

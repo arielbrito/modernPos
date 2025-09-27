@@ -373,6 +373,43 @@ export interface InventoryAdjustment {
     store: Store; // Relación requerida
 }
 
+export interface Customer {
+    status: null;
+    id: number;
+    code: string;
+    kind?: 'person' | 'company';
+    padron_id?: number;
+    source: 'customer' | 'padron';
+    document_type: 'RNC' | 'CED' | 'NONE';
+    document_number?: string | null;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    is_taxpayer?: boolean;
+    active: boolean;
+    is_generic?: boolean;
+    rnc?: string | null;
+    credit_limit?: number | null;
+    allow_credit?: boolean;
+    credit_terms_days?: number | null;
+    balance: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface Invoice {
+    id: number;
+    date: string;
+    number: string;
+    ncf?: string | null;
+    status: string;
+    items_count: number;
+    total: number;
+    paid: number;
+    due: number;
+}
+
 declare module '@inertiajs/react' {
     export interface PageProps extends InertiaPageProps, SharedProps {}
 }

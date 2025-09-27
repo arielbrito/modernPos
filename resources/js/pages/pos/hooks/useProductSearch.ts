@@ -47,7 +47,7 @@ export function useProductSearch(debounceMs: number = 300): UseProductSearchResu
         if (query.trim() === '') {
             // Si prefieres que la lista se limpie al borrar la búsqueda,
             // puedes descomentar la siguiente línea:
-            // setResults([]);
+            setResults([]);
             return;
         }
 

@@ -11,7 +11,7 @@ import { UsePosCartResult } from './usePosCart';
 interface UsePosSaleProcessorProps {
     context: PosContext;
     cart: UsePosCartResult;
-    customer: PosCustomer;
+    customer: PosCustomer | null;
     ncfInfo: { type: 'B01' | 'B02'; preview: string | null };
     onSuccess: () => void;
 }
@@ -19,7 +19,7 @@ interface UsePosSaleProcessorProps {
 export function usePosSaleProcessor({ context, cart, customer, ncfInfo, onSuccess }: UsePosSaleProcessorProps) {
     const [isProcessing, setIsProcessing] = useState(false);
 
-    const processSale = useCallback(
+    const processPaidSale = useCallback(
         (payments: UIPayment[], change: number) => {
             if (cart.items.length === 0) return;
             if (!context.storeId || !context.registerId || !context.shiftId) {
@@ -32,25 +32,67 @@ export function usePosSaleProcessor({ context, cart, customer, ncfInfo, onSucces
             // aunque el PaymentDialog ya lo pre-valida.
 
             const payload = buildSalePayload({ context, cart, customer, ncfInfo, payments });
+            submit(payload);
 
-            setIsProcessing(true);
-            router.post(SaleController.store.url(), payload, {
-                preserveScroll: true,
-                onSuccess: () => {
-                    onSuccess(); // Llama al callback de éxito para limpiar el estado
-                },
-                onError: (errors) => {
-                    console.error('Error al procesar la venta:', errors);
-                    const errorMessages = Object.values(errors).join('\n');
-                    toast.error(`Error al procesar la venta: ${errorMessages}`);
-                },
-                onFinish: () => setIsProcessing(false),
-            });
+            // setIsProcessing(true);
+            // router.post(SaleController.store.url(), payload, {
+            //     preserveScroll: true,
+            //     onSuccess: () => {
+            //         onSuccess(); // Llama al callback de éxito para limpiar el estado
+            //     },
+            //     onError: (errors) => {
+            //         console.error('Error al procesar la venta:', errors);
+            //         const errorMessages = Object.values(errors).join('\n');
+            //         toast.error(`Error al procesar la venta: ${errorMessages}`);
+            //     },
+            //     onFinish: () => setIsProcessing(false),
+            // });
         },
         [context, cart, customer, ncfInfo, onSuccess],
     );
 
-    return { isProcessing, processSale };
+    const processCreditSale = useCallback(() => {
+        if (!customer) {
+            toast.error('Se requiere un cliente para ventas a crédito.');
+            return;
+        }
+        if (!customer.allow_credit) {
+            toast.error(`El cliente ${customer.name} no tiene crédito habilitado.`);
+            return;
+        }
+
+        // Creamos un payload especial para la venta a crédito
+        const creditPayments: UIPayment[] = [
+            {
+                method: 'credit',
+                amount: cart.totals.total,
+                currency_code: 'DOP', // O la moneda principal de la venta
+            },
+        ];
+
+        const payload = buildSalePayload({ context, cart, customer, ncfInfo, payments: creditPayments });
+        console.log('payload de venta a crédito:', payload);
+        submit(payload);
+    }, [context, cart, customer, ncfInfo, onSuccess]);
+
+    const submit = (payload: SalePayload) => {
+        setIsProcessing(true);
+        router.post(SaleController.store.url(), payload, {
+            preserveScroll: true,
+            onSuccess: () => {
+                onSuccess(); // Limpia el TPV
+            },
+            onError: (errors) => {
+                console.error('Error al procesar la venta:', errors);
+                const errorMessages = Object.values(errors).join('\n');
+                toast.error(`Error al procesar la venta: ${errorMessages}`);
+                console.log('errorMessages:', errorMessages);
+            },
+            onFinish: () => setIsProcessing(false),
+        });
+    };
+
+    return { isProcessing, processPaidSale, processCreditSale };
 }
 
 // Función interna para construir el payload

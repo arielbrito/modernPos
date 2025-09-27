@@ -2,7 +2,8 @@ import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, Grid3X3, List, Scan, User, FileText } from 'lucide-react';
-import CustomerQuickPick, { type CustomerLite } from './customer-quick-pick';
+import CustomerQuickPick from './customer-quick-pick';
+import { Customer } from '@/types';
 
 interface ProductSearchProps {
     query: string;
@@ -11,8 +12,8 @@ interface ProductSearchProps {
     onViewModeChange: (mode: 'grid' | 'list') => void;
 
     // Props para el selector de cliente
-    customer: CustomerLite | null;
-    onCustomerChange: (customer: CustomerLite | null) => void;
+    customer: Customer | null;
+    onCustomerChange: (customer: Customer | null) => void;
     activeStoreId: number | null;
 
     // Props para mostrar el NCF

@@ -24,24 +24,26 @@ import { toast } from "sonner";
 import CustomerController from "@/actions/App/Http/Controllers/CRM/CustomerController";
 import DgiiLookupController from "@/actions/App/Http/Controllers/CRM/DgiiLookupController";
 import NcfApiController from "@/actions/App/Http/Controllers/Fiscal/NcfApiController";
+import { Customer } from "@/types";
 
 // =================================================================
 // TYPES
 // =================================================================
-export type CustomerLite = {
-    id: number;
-    padron_id?: number;
-    source: "customer" | "padron";
-    name: string;
-    document_type: "RNC" | "CED" | "NONE";
-    document_number?: string | null;
-    is_taxpayer?: boolean | number | string | null;
-    is_generic?: boolean | null;
-    status?: string | null;
-    email?: string | null;
-    phone?: string | null;
-    address?: string | null;
-};
+// export type CustomerLite = {
+//     allow_credit?: boolean;
+//     id: number;
+//     padron_id?: number;
+//     source: "customer" | "padron";
+//     name: string;
+//     document_type: "RNC" | "CED" | "NONE";
+//     document_number?: string | null;
+//     is_taxpayer?: boolean | number | string | null;
+//     is_generic?: boolean | null;
+//     status?: string | null;
+//     email?: string | null;
+//     phone?: string | null;
+//     address?: string | null;
+// };
 
 export type DgiiInfo = {
     found: boolean;
@@ -54,8 +56,8 @@ export type DgiiInfo = {
 
 export type CustomerQuickPickProps = {
     activeStoreId: number | null | undefined;
-    value: CustomerLite | null;
-    onChange: (c: CustomerLite | null) => void;
+    value: Customer | null;
+    onChange: (c: Customer | null) => void;
     onNcfChange?: (type: "B01" | "B02", preview: string | null) => void;
     className?: string;
     disabled?: boolean;
@@ -109,12 +111,12 @@ async function axiosGetWithRetry<T>(
 // =================================================================
 // HOOKS (DGII / NCF iguales a los que ya usas)
 // =================================================================
-const useDgiiStatus = (customer: CustomerLite | null) => {
+const useDgiiStatus = (customer: Customer | null) => {
     const [dgii, setDgii] = useState<DgiiInfo | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchDgiiStatus = useCallback(async (cust: CustomerLite) => {
+    const fetchDgiiStatus = useCallback(async (cust: Customer) => {
         const { document_type: docType, document_number: docNumber } = cust;
         if (!docType || docType === "NONE" || !docNumber) {
             setDgii(null);
@@ -152,7 +154,7 @@ const useDgiiStatus = (customer: CustomerLite | null) => {
 };
 
 const useNcfInfo = (
-    customer: CustomerLite | null,
+    customer: Customer | null,
     activeStoreId: number | null | undefined,
     onNcfChange?: (type: "B01" | "B02", preview: string | null) => void
 ) => {
@@ -218,7 +220,7 @@ export default function CustomerQuickPick({
 }: CustomerQuickPickProps) {
     const [open, setOpen] = useState(false);
     const [term, setTerm] = useState("");
-    const [results, setResults] = useState<CustomerLite[]>([]);
+    const [results, setResults] = useState<Customer[]>([]);
     const [loading, setLoading] = useState(false);
 
     const { dgii, loading: dgiiLoading, error: dgiiError } = useDgiiStatus(value);
@@ -275,7 +277,7 @@ export default function CustomerQuickPick({
         }
     };
 
-    const handleSelectCustomer = (customer: CustomerLite) => {
+    const handleSelectCustomer = (customer: Customer) => {
         onChange(customer);
         setOpen(false);
     };

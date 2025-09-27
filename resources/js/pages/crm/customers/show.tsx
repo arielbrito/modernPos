@@ -21,27 +21,36 @@ import { CustomerFormDialog } from "./partials/customer-form-dialog";
 import customers from "@/routes/customers";
 import CustomerController from "@/actions/App/Http/Controllers/CRM/CustomerController";
 import { money } from "@/utils/inventory";
+import { CustomerPaymentModal } from "./partials/CustomerPaymentModal";
+
+import { Register, Customer } from "@/types";
+import SaleController from "@/actions/App/Http/Controllers/Sales/SaleController";
 
 type BreadcrumbItem = { title: string; href: string };
 
-type Customer = {
+// type Customer = {
+//     id: number;
+//     code: string;
+//     name: string;
+//     kind: "person" | "company";
+//     document_type: "RNC" | "CED" | "NONE";
+//     document_number: string | null;
+//     email: string | null;
+//     phone: string | null;
+//     address: string | null;
+//     is_taxpayer: boolean;
+//     active: boolean;
+//     allow_credit: boolean;
+//     credit_limit: number;
+//     credit_terms_days: number;
+//     created_at?: string;
+//     balance?: number;
+// };
+interface CustomerLite {
     id: number;
-    code: string;
     name: string;
-    kind: "person" | "company";
-    document_type: "RNC" | "CED" | "NONE";
-    document_number: string | null;
-    email: string | null;
-    phone: string | null;
-    address: string | null;
-    is_taxpayer: boolean;
-    active: boolean;
-    allow_credit: boolean;
-    credit_limit: number;
-    credit_terms_days: number;
-    created_at?: string;
-    balance?: number;
-};
+    balance: number;
+}
 
 type Invoice = {
     id: number;
@@ -64,17 +73,20 @@ type Paginated<T> = {
 
 interface Props {
     customer: Customer;
+    customerLite: CustomerLite;
     stats: { invoices_count: number; total_purchase: number; total_paid: number; balance: number };
     invoices: Paginated<Invoice>;
+    registers: Register[];
 }
 
-export default function Show({ customer, stats, invoices }: Props) {
+export default function Show({ customer, stats, invoices, registers, customerLite }: Props) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: "Clientes", href: CustomerController.index.url() },
         { title: customer.name, href: customers.show.url({ customer: customer.id }) },
     ];
 
     const [openEdit, setOpenEdit] = React.useState(false);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = React.useState(false);
 
     const initials = React.useMemo(() => {
         const parts = (customer.name || "").split(" ").filter(Boolean);
@@ -90,6 +102,7 @@ export default function Show({ customer, stats, invoices }: Props) {
         // Ajusta ruta cuando tengas estado de cuenta
         window.print();
     };
+
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -212,7 +225,9 @@ export default function Show({ customer, stats, invoices }: Props) {
                             </div>
 
                             <div className="flex gap-2">
-                                <Button className="flex-1" variant="outline"><Wallet2 className="h-4 w-4 mr-2" /> Abono</Button>
+                                <Button className="flex-1" variant="outline" onClick={() => setIsPaymentModalOpen(true)}>
+                                    <Wallet2 className="h-4 w-4 mr-2" /> Abono
+                                </Button>
                                 <Button className="flex-1" variant="default"><Receipt className="h-4 w-4 mr-2" /> Nueva factura</Button>
                             </div>
                         </CardContent>
@@ -273,9 +288,9 @@ export default function Show({ customer, stats, invoices }: Props) {
                                                 <TableCell className="text-right">
                                                     <div className="flex justify-end gap-2">
                                                         <Button size="sm" variant="outline" asChild>
-                                                            <Link href={`#`}>Ver</Link>
+                                                            <Link href={SaleController.show({ sale: inv.id })}>Ver</Link>
                                                         </Button>
-                                                        {inv.due > 0 && <Button size="sm" variant="default">Pagar</Button>}
+                                                        {inv.due > 0 && <Button size="sm" variant="default" onClick={() => setIsPaymentModalOpen(true)}>Pagar</Button>}
                                                     </div>
                                                 </TableCell>
                                             </TableRow>
@@ -291,6 +306,12 @@ export default function Show({ customer, stats, invoices }: Props) {
 
             {/* Modal editar (reutiliza tu dialog) */}
             <CustomerFormDialog open={openEdit} setOpen={setOpenEdit} editing={customer as any} />
+            <CustomerPaymentModal
+                customer={customer}
+                registers={registers}
+                isOpen={isPaymentModalOpen}
+                setIsOpen={setIsPaymentModalOpen}
+            />
         </AppLayout>
     );
 }

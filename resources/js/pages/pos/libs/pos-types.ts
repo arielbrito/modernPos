@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { CustomerLite } from '../partials/customer-quick-pick';
+import { Customer } from '@/types/index';
 
 // Tipos del Carrito
 export type CartItem = {
@@ -79,4 +79,4 @@ export interface PosContext {
 }
 
 // Cliente del POS
-export type PosCustomer = CustomerLite | null;
+export type PosCustomer = Customer | null;

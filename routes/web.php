@@ -9,6 +9,7 @@ use App\Http\Controllers\Fiscal\NcfSequenceController;
 use App\Http\Controllers\Notifications\NotificationController;
 use App\Http\Controllers\POS\PosController;
 use App\Http\Controllers\Fiscal\DgiiSyncController;
+use App\Http\Controllers\CRM\CustomerPaymentController;
 
 
 use App\Http\Middleware\EnsureStoreIsSelected;
@@ -85,12 +86,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         //Rutas de Customers
 
+
         Route::get('crm/customers/quick-search', [CustomerController::class, 'quickSearch'])
             ->name('crm.customers.quick_search');
         Route::get('/dgii/find', [DgiiLookupController::class, 'find'])->name('dgii.find')->middleware('throttle:30,1');
         Route::resource('crm/customers', CustomerController::class);
         Route::get('crm/customers-export', [CustomerController::class, 'export'])
             ->name('crm.customers.export');
+        //Rutas para el manejo de pagos de clientes
+
+        Route::post('/customers/{customer}/payments', [CustomerPaymentController::class, 'store'])
+            ->name('customers.payments.store');
 
 
 

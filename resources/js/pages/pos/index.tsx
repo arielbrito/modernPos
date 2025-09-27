@@ -18,7 +18,7 @@ import { usePosCart } from './hooks/usePosCart';
 import { usePosSaleProcessor } from './hooks/usePosSaleProcessor';
 
 // Tipos
-import { CustomerLite } from './partials/customer-quick-pick';
+import { Customer } from '@/types/index';
 import { type UIPayment } from './partials/paymentDialog';
 
 export default function PosPage() {
@@ -30,9 +30,10 @@ export default function PosPage() {
     const cart = usePosCart();
 
     // --- 2. Estado específico de la UI ---
+
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-    const [customer, setCustomer] = useState<CustomerLite | null>(null);
+    const [customer, setCustomer] = useState<Customer | null>(null);
     const [ncfInfo, setNcfInfo] = useState<{ type: "B01" | "B02"; preview: string | null }>({ type: "B02", preview: null });
 
     const handleNcfChange = useCallback((type: 'B01' | 'B02', preview: string | null) => {
@@ -40,7 +41,7 @@ export default function PosPage() {
     }, []);
 
     // --- 3. Hook de Procesamiento (depende de otros hooks y estado) ---
-    const { isProcessing, processSale } = usePosSaleProcessor({
+    const { isProcessing, processPaidSale, processCreditSale } = usePosSaleProcessor({
         context,
         cart,
         customer,
@@ -57,7 +58,6 @@ export default function PosPage() {
     // --- 4. Efectos para notificaciones y limpieza ---
     useEffect(() => {
         if (pos?.last_sale) {
-            toast.success(`Venta ${pos.last_sale.number} completada.`);
             window.open(`/sales/${pos.last_sale.id}/print`, '_blank');
         }
     }, [pos?.last_sale]);
@@ -66,6 +66,8 @@ export default function PosPage() {
         if (flash?.success) toast.success(flash.success);
         if (flash?.error) toast.error(flash.error);
     }, [flash]);
+
+
 
 
     // --- 5. Renderizado del Layout y Componentes ---
@@ -124,8 +126,10 @@ export default function PosPage() {
                 saleCurrency="DOP"
                 currencies={['DOP', 'USD', 'EUR']}
                 defaultFx={{ USD: 59.5, EUR: 65 }}
-                onSubmit={(payments: UIPayment[], change: number) => processSale(payments, change)}
+                onSubmit={(payments: UIPayment[], change: number) => processPaidSale(payments, change)}
                 isProcessing={isProcessing}
+                customer={customer}
+                onCreditSale={processCreditSale}
             />
         </AppLayout>
     );

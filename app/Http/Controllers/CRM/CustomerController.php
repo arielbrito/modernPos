@@ -7,6 +7,7 @@ use App\Http\Requests\Customers\StoreCustomerRequest;
 use App\Http\Requests\Customers\UpdateCustomerRequest;
 use App\Models\Customer;
 use App\Models\DgiiTaxpayer;
+use App\Models\Register;
 use App\Models\Sale;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -132,6 +133,7 @@ class CustomerController extends Controller
                 'paid'       => (float)$s->paid_total,
                 'due'        => (float)max(0, $s->due_total),
             ]),
+            'registers' => Register::where('active', true)->get(['id', 'name']),
         ]);
     }
 
@@ -231,7 +233,7 @@ class CustomerController extends Controller
 
         // --- 1) CLIENTES FIJOS ---
         $cq = Customer::query()
-            ->select('id', 'name', 'document_type', 'document_number', 'document_number_norm', 'is_taxpayer', 'active')
+            ->select('id', 'name', 'document_type', 'document_number', 'document_number_norm', 'is_taxpayer', 'active', 'allow_credit', 'credit_limit', 'credit_terms_days')
             ->where('active', true);
 
         if ($term !== '') {
@@ -264,6 +266,9 @@ class CustomerController extends Controller
                 'document_number' => $c->document_number,
                 'is_taxpayer'     => (bool)$c->is_taxpayer,
                 'status'          => null,
+                'allow_credit'    => (bool)$c->allow_credit,
+                'credit_limit'    => (float)$c->credit_limit,
+                'credit_terms_days' => (int)$c->credit_terms_days,
             ];
         })->all();
 

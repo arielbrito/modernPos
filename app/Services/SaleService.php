@@ -42,58 +42,44 @@ class SaleService
      */
     public function create(array $input, ?int $userId = null): Sale
     {
+        // --- 1. SETUP & INITIAL VALIDATION ---
         $userId     ??= Auth::id();
-        $storeId     = (int)($input['store_id'] ?? session('active_store_id'));
-        $registerId  = $input['register_id'] ?? session('active_register_id');
-        $shiftId     = $input['shift_id'] ?? session('active_shift_id');
+        $storeId    = (int)($input['store_id'] ?? session('active_store_id'));
+        $registerId = $input['register_id'] ?? session('active_register_id');
+        $shiftId    = $input['shift_id'] ?? session('active_shift_id');
 
-        if (!$storeId)    throw new InvalidArgumentException('No hay tienda activa.');
-        if (!$registerId) throw new InvalidArgumentException('No hay caja activa.');
-        if (!$shiftId)    throw new InvalidArgumentException('No hay turno abierto.');
+        if (!$storeId || !$registerId || !$shiftId) {
+            throw new InvalidArgumentException('Se requiere una tienda, caja y turno activos.');
+        }
 
-        /** @var CashShift $shift */
-        $shift = CashShift::query()
-            ->where('id', $shiftId)
-            ->where('register_id', $registerId)
-            ->where('status', 'open')
-            ->lockForUpdate()
-            ->first();
-
+        $shift = CashShift::query()->where('id', $shiftId)->where('status', 'open')->lockForUpdate()->first();
         if (!$shift) throw new InvalidArgumentException('Turno inválido o no está abierto.');
 
-        /** @var Register $register */
-        $register = Register::query()->findOrFail($registerId, ['id', 'store_id']);
-        if ($register->store_id != $storeId) {
-            throw new InvalidArgumentException('La caja no pertenece a la tienda activa.');
+        $lines    = $input['lines'] ?? [];
+        $payments = $input['payments'] ?? [];
+        if (empty($lines)) throw new InvalidArgumentException('No se recibieron líneas de venta.');
+
+        // --- 2. CUSTOMER & CREDIT LOGIC ---
+        $customer = !empty($input['customer_id']) ? Customer::find($input['customer_id']) : null;
+
+        $isCreditSale = count($payments) === 1 && ($payments[0]['method'] ?? '') === 'credit';
+        if ($isCreditSale) {
+            if (!$customer) throw new InvalidArgumentException('Se debe seleccionar un cliente para las ventas a crédito.');
+            if (!$customer->allow_credit) throw new InvalidArgumentException("El cliente {$customer->name} no tiene el crédito habilitado.");
         }
 
-        // ================== Cliente fijo (opcional) ==================
-        $customer = null;
-        if (!empty($input['customer_id'])) {
-            $customer = Customer::find($input['customer_id']);
-        }
+        // --- 3. BILLING SNAPSHOT ---
+        $billToName       = trim((string)($input['bill_to_name'] ?? ($customer?->name ?? 'Consumidor Final')));
+        $billToDocType    = strtoupper((string)($input['bill_to_doc_type'] ?? ($customer?->document_type ?? 'NONE')));
+        $billToDocNumber  = (string)($input['bill_to_doc_number'] ?? ($customer?->document_number ?? null));
+        $billToIsTaxpayer = (bool)($input['bill_to_is_taxpayer'] ?? ($customer?->is_taxpayer ?? false));
 
-        // ================== Snapshot "facturar a" ==================
-        // Si vienen bill_to_* en el request (padrón o incluso cliente fijo), se usan.
-        // Si no vienen y hay cliente fijo, se derivan del cliente.
-        $billToName        = trim((string)($input['bill_to_name'] ?? ($customer?->name ?? 'Consumidor Final')));
-        $billToDocType     = strtoupper((string)($input['bill_to_doc_type'] ?? ($customer?->document_type ?? 'NONE')));
-        $billToDocNumber   = (string)($input['bill_to_doc_number'] ?? ($customer?->document_number ?? null));
-        $billToIsTaxpayer  = (bool)($input['bill_to_is_taxpayer'] ?? ($customer?->is_taxpayer ?? false));
-
-        // Normalización sencilla del tipo
         if (!in_array($billToDocType, ['RNC', 'CED', 'NONE'], true)) {
             $billToDocType = 'NONE';
         }
         if ($billToDocType === 'NONE') {
             $billToDocNumber  = null;
             $billToIsTaxpayer = false;
-        }
-
-        $lines    = $input['lines']    ?? [];
-        $payments = $input['payments'] ?? [];
-        if (empty($lines)) {
-            throw new InvalidArgumentException('No se recibieron líneas de venta.');
         }
 
         $saleCurrency = strtoupper((string)($input['currency_code'] ?? 'DOP'));
@@ -115,38 +101,34 @@ class SaleService
             $lines,
             $payments,
             $userId,
-            $input
+            $input,
+            $isCreditSale
         ) {
-            // ========= 1) Crear encabezado preliminar =========
+            // ========= STEP 1: Create Sale Header =========
             $sale = new Sale();
-            $sale->store_id        = $storeId;
-            $sale->register_id     = $registerId;
-            $sale->shift_id        = $shift->id;
-            $sale->user_id         = $userId;
+            $sale->fill([
+                'store_id'              => $storeId,
+                'register_id'           => $registerId,
+                'shift_id'              => $shift->id,
+                'user_id'               => $userId,
+                'customer_id'           => $customer?->id,
+                'bill_to_name'          => $billToName,
+                'bill_to_doc_type'      => $billToDocType,
+                'bill_to_doc_number'    => $billToDocNumber,
+                'bill_to_is_taxpayer'   => $billToIsTaxpayer,
+                'currency_code'         => $saleCurrency,
+                'number'                => $this->nextNumber($storeId),
+                'status'                => 'completed',
+                'occurred_at'           => $occurredAt,
+                'meta'                  => $meta,
+            ]);
+            $sale->save();
 
-            // Guardamos customer_id solo si existe (cliente fijo)
-            $sale->customer_id     = $customer?->id;
-
-            // Snapshot de facturación SIEMPRE
-            $sale->bill_to_name        = $billToName;
-            $sale->bill_to_doc_type    = $billToDocType;
-            $sale->bill_to_doc_number  = $billToDocNumber;
-            $sale->bill_to_is_taxpayer = (bool)$billToIsTaxpayer;
-
-            $sale->currency_code   = $saleCurrency;
-            $sale->number          = $this->nextNumber($storeId);
-            $sale->status          = 'completed';
-            $sale->occurred_at     = $occurredAt;
-            $sale->meta            = $meta;
-
+            // ========= STEP 2: Process Lines & Calculate Totals =========
             $subtotal = 0;
             $discountTotal = 0;
             $taxTotal = 0;
             $grandTotal = 0;
-
-            $sale->save(); // obtener id para lines/source refs
-
-            // ========= 2) Líneas: totales + rebaja de inventario =========
             foreach ($lines as $i => $row) {
                 $variantId  = (int)$row['variant_id'];
                 $qty        = (float)$row['qty'];
@@ -269,6 +251,7 @@ class SaleService
                 } // --- Fin del bloque condicional de 
             }
 
+
             // ========= 3) NCF =========
             $requested = $input['ncf_type'] ?? null;
 
@@ -310,104 +293,120 @@ class SaleService
                 $sale->ncf_number = null;
             }
 
-            // ========= 4) Totales =========
+            // ========= STEP 4: Save Totals to Sale (CRITICAL STEP) =========
             $sale->subtotal       = round($subtotal, 2);
             $sale->discount_total = round($discountTotal, 2);
             $sale->tax_total      = round($taxTotal, 2);
             $sale->total          = round($grandTotal, 2);
             $sale->save();
 
-            // ========= 5) Pagos y movimientos de caja =========
-            $paidInSaleCcy = 0.0;
+            // ========= STEP 5: Process Payments (Now with the correct total) =========
+            if ($isCreditSale) {
+                // --- CREDIT SALE FLOW ---
+                if ($customer->credit_limit > 0 && ($customer->balance + $sale->total) > $customer->credit_limit) {
+                    throw ValidationException::withMessages(['credit_limit' => 'This sale exceeds the customer\'s credit limit.']);
+                }
 
-            foreach ($payments as $p) {
-                $method   = (string)$p['method'];
-                $amount   = (float)$p['amount'];
-                $payCcy   = strtoupper((string)($p['currency_code'] ?? $sale->currency_code));
-                $ref      = $p['reference'] ?? null;
-
-                // Acepta la clave usada por el front: fx_rate_to_sale (y como fallback fx_rate)
-                $fxRate = isset($p['fx_rate_to_sale'])
-                    ? (float)$p['fx_rate_to_sale']
-                    : (isset($p['fx_rate']) ? (float)$p['fx_rate'] : null);
-
-                // Efectivo: montos recibidos y devuelta (pueden venir nulos si no aplica)
-                $tendered = isset($p['tendered_amount']) && $p['tendered_amount'] !== ''
-                    ? (float)$p['tendered_amount'] : null;
-
-                $changeAmt = isset($p['change_amount']) && $p['change_amount'] !== ''
-                    ? (float)$p['change_amount'] : null;
-
-                $changeCcy = $p['change_currency_code'] ?? $payCcy;
-
-                if ($amount <= 0) continue;
-
-                /** @var \App\Models\SalePayment $sp */
-                $sp = SalePayment::create([
-                    'sale_id'              => $sale->id,
-                    'method'               => $method,
-                    'amount'               => round($amount, 2),
-                    'currency_code'        => $payCcy,
-                    'fx_rate_to_sale'      => $fxRate,                 // ✅ a columna
-                    'tendered_amount'      => $tendered,               // ✅ a columna
-                    'change_amount'        => $changeAmt,              // ✅ a columna
-                    'change_currency_code' => $changeCcy,              // ✅ a columna
-                    'reference'            => $ref,
-                    'bank_name' => $p['bank_name'] ?? null,
-                    'card_brand' => $p['card_brand'] ?? null,
-                    'card_last4' => $p['card_last4'] ?? null,
-                    'meta'                 => [], // deja meta vacío o úsalo para otra cosa
+                $sale->payments()->create([
+                    'method'        => 'credit',
+                    'amount'        => $sale->total,
+                    'currency_code' => $sale->currency_code,
                 ]);
 
-                // Para validar cobertura del total en moneda de la venta
-                $equiv = $payCcy === $sale->currency_code
-                    ? $amount
-                    : ($fxRate ? $amount * $fxRate : 0.0);
+                $sale->paid_total = 0;
+                $sale->due_total  = $sale->total;
+                $customer->increment('balance', $sale->total);
+            } else {
+                // --- FLUJO DE VENTA NORMAL (Tu código original intacto) ---
+                $paidInSaleCcy = 0.0;
+                foreach ($payments as $p) {
+                    $method   = (string)$p['method'];
+                    $amount   = (float)$p['amount'];
+                    $payCcy   = strtoupper((string)($p['currency_code'] ?? $sale->currency_code));
+                    $ref      = $p['reference'] ?? null;
 
-                $paidInSaleCcy += $equiv;
+                    // Acepta la clave usada por el front: fx_rate_to_sale (y como fallback fx_rate)
+                    $fxRate = isset($p['fx_rate_to_sale'])
+                        ? (float)$p['fx_rate_to_sale']
+                        : (isset($p['fx_rate']) ? (float)$p['fx_rate'] : null);
 
-                // Ingreso a caja si el pago es en efectivo
-                if ($method === 'cash') {
-                    $this->cash->movement(
-                        shiftId: $shift->id,
-                        userId: $userId,
-                        direction: 'in',
-                        currency: $payCcy,
-                        amount: round($amount, 2),
-                        reason: 'sale',
-                        reference: $sale->number,
-                        meta: ['payment_id' => $sp->id],
-                        source: $sale,
-                    );
+                    // Efectivo: montos recibidos y devuelta (pueden venir nulos si no aplica)
+                    $tendered = isset($p['tendered_amount']) && $p['tendered_amount'] !== ''
+                        ? (float)$p['tendered_amount'] : null;
+
+                    $changeAmt = isset($p['change_amount']) && $p['change_amount'] !== ''
+                        ? (float)$p['change_amount'] : null;
+
+                    $changeCcy = $p['change_currency_code'] ?? $payCcy;
+
+                    if ($amount <= 0) continue;
+
+                    /** @var \App\Models\SalePayment $sp */
+                    $sp = SalePayment::create([
+                        'sale_id'              => $sale->id,
+                        'method'               => $method,
+                        'amount'               => round($amount, 2),
+                        'currency_code'        => $payCcy,
+                        'fx_rate_to_sale'      => $fxRate,                 // ✅ a columna
+                        'tendered_amount'      => $tendered,               // ✅ a columna
+                        'change_amount'        => $changeAmt,              // ✅ a columna
+                        'change_currency_code' => $changeCcy,              // ✅ a columna
+                        'reference'            => $ref,
+                        'bank_name' => $p['bank_name'] ?? null,
+                        'card_brand' => $p['card_brand'] ?? null,
+                        'card_last4' => $p['card_last4'] ?? null,
+                        'meta'                 => [], // deja meta vacío o úsalo para otra cosa
+                    ]);
+
+                    // Para validar cobertura del total en moneda de la venta
+                    $equiv = $payCcy === $sale->currency_code
+                        ? $amount
+                        : ($fxRate ? $amount * $fxRate : 0.0);
+
+                    $paidInSaleCcy += $equiv;
+
+                    // Ingreso a caja si el pago es en efectivo
+                    if ($method === 'cash') {
+                        $this->cash->movement(
+                            shiftId: $shift->id,
+                            userId: $userId,
+                            direction: 'in',
+                            currency: $payCcy,
+                            amount: round($amount, 2),
+                            reason: 'sale',
+                            reference: $sale->number,
+                            meta: ['payment_id' => $sp->id],
+                            source: $sale,
+                        );
 
 
-                    if ($tendered && $tendered > $amount) {
-                        $changeInPayCcy = round($tendered - $amount, 2);
-                        $finalChangeAmount = $changeInPayCcy;
+                        if ($tendered && $tendered > $amount) {
+                            $changeInPayCcy = round($tendered - $amount, 2);
+                            $finalChangeAmount = $changeInPayCcy;
 
-                        // Si la moneda de devolución es diferente a la del pago, convertir
-                        if ($changeCcy !== $payCcy && $fxRate) {
-                            $finalChangeAmount = round($changeInPayCcy * $fxRate, 2);
+                            // Si la moneda de devolución es diferente a la del pago, convertir
+                            if ($changeCcy !== $payCcy && $fxRate) {
+                                $finalChangeAmount = round($changeInPayCcy * $fxRate, 2);
+                            }
+
+                            // Actualiza el registro del pago con los valores recalculados y seguros
+                            $sp->update([
+                                'change_amount' => $finalChangeAmount,
+                                'change_currency_code' => $changeCcy // El código de moneda sí se confía
+                            ]);
                         }
-
-                        // Actualiza el registro del pago con los valores recalculados y seguros
-                        $sp->update([
-                            'change_amount' => $finalChangeAmount,
-                            'change_currency_code' => $changeCcy // El código de moneda sí se confía
-                        ]);
                     }
                 }
+
+                if (round($paidInSaleCcy, 2) + 0.00001 < round($sale->total, 2)) {
+                    throw new InvalidArgumentException('Los pagos no cubren el total de la venta.');
+                }
+                $sale->paid_total = round($paidInSaleCcy, 2);
+                $sale->due_total  = max(0, round($sale->total - $sale->paid_total, 2));
             }
 
-            if (round($paidInSaleCcy, 2) + 0.00001 < round($sale->total, 2)) {
-                throw new InvalidArgumentException('Los pagos no cubren el total de la venta.');
-            }
-            $sale->paid_total = round($paidInSaleCcy, 2);
-            $sale->due_total  = max(0, round($sale->total - $sale->paid_total, 2));
             $sale->save();
-
-
-            return $sale->fresh(['lines', 'payments']);
+            return $sale->fresh(['lines', 'payments', 'customer']);
         });
     }
 

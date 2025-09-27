@@ -2,7 +2,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import * as React from 'react';
 import axios, { AxiosError } from 'axios';
-import { Bell, CheckCheck, Loader2, Trash2 } from 'lucide-react';
+import {
+    Bell,
+    CheckCheck,
+    Loader2,
+    Trash2,
+    Sparkles,
+    Clock,
+    Eye,
+    Zap,
+
+    RefreshCcw
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -204,15 +215,23 @@ export default function NotificationBell({
     return (
         <DropdownMenu open={open} onOpenChange={setOpen}>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative h-9 w-9">
-                    <Bell className="h-5 w-5" />
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative h-10 w-10 rounded-xl hover:bg-primary/15 hover:text-primary transition-all duration-200 group hover:scale-110"
+                >
+                    <div className="absolute -inset-1 bg-primary/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm"></div>
+                    <Bell className="h-5 w-5 relative z-10 group-hover:animate-pulse" />
                     {unreadCount > 0 && (
-                        <Badge
-                            className="absolute -top-1 -right-1 px-1.5 py-0 text-[10px] leading-none animate-pulse p-1"
-                            variant="destructive"
-                        >
-                            {formatUnreadCount(unreadCount)}
-                        </Badge>
+                        <>
+                            <Badge
+                                className="absolute -top-2 -right-2 px-1.5 py-0.5 text-[10px] font-bold leading-none animate-bounce bg-primary hover:bg-primary text-primary-foreground border-2 border-background shadow-lg min-w-[20px] h-5 flex items-center justify-center"
+                            >
+                                {formatUnreadCount(unreadCount)}
+                            </Badge>
+                            {/* Efecto de pulso */}
+                            <div className="absolute -top-2 -right-2 w-5 h-5 bg-primary/30 rounded-full animate-ping"></div>
+                        </>
                     )}
                     <span className="sr-only">
                         Notificaciones{unreadCount > 0 ? ` (${unreadCount} sin leer)` : ''}
@@ -220,59 +239,84 @@ export default function NotificationBell({
                 </Button>
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent align="end" className="w-96 p-0">
-                <div className="flex items-center justify-between px-3 py-2">
-                    <DropdownMenuLabel className="p-0">
-                        Notificaciones
-                        {error && <span className="text-xs text-destructive ml-2">({error})</span>}
-                    </DropdownMenuLabel>
-                    <div className="flex items-center gap-1">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => load(true)}
-                            disabled={loading}
-                            className="h-8"
-                        >
-                            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Actualizar'}
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={markAll}
-                            disabled={unreadCount === 0 || loading}
-                            className="h-8"
-                        >
-                            <CheckCheck className="h-4 w-4 mr-1" />
-                            Marcar todas leídas
-                        </Button>
+            <DropdownMenuContent align="end" className="w-96 p-0 rounded-2xl border-2 border-border/50 shadow-2xl backdrop-blur-sm bg-background/95">
+                {/* Header mejorado */}
+                <div className="relative bg-gradient-to-r from-primary/10 via-accent/20 to-primary/10 px-4 py-3 border-b border-border/30">
+                    <div className="absolute top-0 left-0 right-0 h-1 gradient-stoneretail"></div>
+
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="bg-primary/20 rounded-lg p-1.5 border border-primary/30">
+                                <Sparkles className="h-4 w-4 text-primary" />
+                            </div>
+                            <DropdownMenuLabel className="p-0 text-lg font-bold">
+                                Notificaciones
+                                {error && (
+                                    <span className="text-xs text-destructive ml-2 bg-destructive/10 px-2 py-1 rounded-md">
+                                        {error}
+                                    </span>
+                                )}
+                            </DropdownMenuLabel>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => load(true)}
+                                disabled={loading}
+                                className="h-8 px-3 rounded-lg hover:bg-primary/15 hover:text-primary transition-all duration-200"
+                            >
+                                {loading ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                    <RefreshCcw className="h-4 w-4" />
+                                )}
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={markAll}
+                                disabled={unreadCount === 0 || loading}
+                                className="h-8 px-3 rounded-lg hover:bg-emerald-100 hover:text-emerald-700 transition-all duration-200 disabled:opacity-50"
+                            >
+                                <CheckCheck className="h-4 w-4 mr-1" />
+                                <span className="hidden sm:inline">Todas</span>
+                            </Button>
+                        </div>
                     </div>
                 </div>
-                <DropdownMenuSeparator />
 
-                <ScrollArea className="h-[360px]">
-                    <div className="px-2 py-2 space-y-2">
-                        {/* Unread notifications */}
+                <ScrollArea className="h-[380px] scrollbar-stoneretail">
+                    <div className="p-3 space-y-2">
+                        {/* Unread notifications mejoradas */}
                         {displayedUnread.map((n) => (
                             <div
                                 key={n.id}
-                                className={`rounded-md border p-2 bg-amber-50 dark:bg-amber-950/30 cursor-pointer transition-all hover:bg-amber-100 dark:hover:bg-amber-950/50 ${optimisticUpdates.removing.has(n.id) ? 'opacity-50' : ''
-                                    }`}
+                                className={`group relative rounded-xl border-2 border-amber-200/50 dark:border-amber-700/30 p-3 bg-gradient-to-r from-amber-50/80 to-primary/5 dark:from-amber-950/20 dark:to-primary/5 cursor-pointer transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:border-primary/30 hover:scale-[1.02] ${optimisticUpdates.removing.has(n.id) ? 'opacity-50' : ''}`}
                                 onClick={() => handleNotificationClick(n)}
                             >
-                                <div className="flex items-start justify-between">
-                                    <div className="pr-2 flex-1">
-                                        <div className="font-medium text-sm">{titleOf(n)}</div>
+                                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl"></div>
+
+                                <div className="relative flex items-start justify-between">
+                                    <div className="pr-3 flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+                                            <div className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
+                                                {titleOf(n)}
+                                            </div>
+                                        </div>
                                         {messageOf(n) && (
-                                            <div className="text-sm text-muted-foreground line-clamp-2">
+                                            <div className="text-sm text-muted-foreground line-clamp-2 mb-2 group-hover:text-foreground/80 transition-colors">
                                                 {messageOf(n)}
                                             </div>
                                         )}
-                                        <div className="text-[10px] text-muted-foreground mt-1">
+                                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground bg-background/60 backdrop-blur-sm rounded-md px-2 py-1 w-fit">
+                                            <Clock className="h-3 w-3" />
                                             {whenOf(n)}
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                    <div className="flex items-center gap-1 flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity duration-200">
                                         <Button
                                             size="icon"
                                             variant="ghost"
@@ -282,7 +326,7 @@ export default function NotificationBell({
                                             }}
                                             disabled={optimisticUpdates.markingAsRead.has(n.id)}
                                             title="Marcar leída"
-                                            className="h-6 w-6"
+                                            className="h-7 w-7 rounded-lg hover:bg-emerald-100 hover:text-emerald-700 transition-all duration-200"
                                         >
                                             {optimisticUpdates.markingAsRead.has(n.id) ? (
                                                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -299,7 +343,7 @@ export default function NotificationBell({
                                             }}
                                             disabled={optimisticUpdates.removing.has(n.id)}
                                             title="Eliminar"
-                                            className="h-6 w-6"
+                                            className="h-7 w-7 rounded-lg hover:bg-red-100 hover:text-red-700 transition-all duration-200"
                                         >
                                             <Trash2 className="h-3 w-3" />
                                         </Button>
@@ -308,29 +352,32 @@ export default function NotificationBell({
                             </div>
                         ))}
 
-                        {/* Read notifications */}
+                        {/* Read notifications mejoradas */}
                         {displayedRead.map((n) => (
                             <div
                                 key={n.id}
-                                className={`rounded-md border p-2 cursor-pointer transition-all hover:bg-muted/50 ${optimisticUpdates.removing.has(n.id) ? 'opacity-50' : ''
-                                    }`}
+                                className={`group relative rounded-xl border border-border/30 p-3 bg-card/50 backdrop-blur-sm cursor-pointer transition-all duration-300 hover:shadow-md hover:shadow-primary/5 hover:border-primary/20 hover:bg-accent/20 ${optimisticUpdates.removing.has(n.id) ? 'opacity-50' : ''}`}
                                 onClick={() => handleNotificationClick(n)}
                             >
                                 <div className="flex items-start justify-between">
-                                    <div className="pr-2 flex-1">
-                                        <div className="font-medium text-sm text-muted-foreground">
-                                            {titleOf(n)}
+                                    <div className="pr-3 flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <Eye className="w-3 h-3 text-muted-foreground/60" />
+                                            <div className="font-medium text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+                                                {titleOf(n)}
+                                            </div>
                                         </div>
                                         {messageOf(n) && (
-                                            <div className="text-sm text-muted-foreground line-clamp-2">
+                                            <div className="text-sm text-muted-foreground line-clamp-2 mb-2">
                                                 {messageOf(n)}
                                             </div>
                                         )}
-                                        <div className="text-[10px] text-muted-foreground mt-1">
+                                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/40 rounded-md px-2 py-1 w-fit">
+                                            <Clock className="h-3 w-3" />
                                             {whenOf(n)}
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                    <div className="flex items-center gap-1 flex-shrink-0 opacity-40 group-hover:opacity-100 transition-opacity duration-200">
                                         <Button
                                             size="icon"
                                             variant="ghost"
@@ -340,7 +387,7 @@ export default function NotificationBell({
                                             }}
                                             disabled={optimisticUpdates.removing.has(n.id)}
                                             title="Eliminar"
-                                            className="h-6 w-6"
+                                            className="h-7 w-7 rounded-lg hover:bg-red-100 hover:text-red-700 transition-all duration-200"
                                         >
                                             <Trash2 className="h-3 w-3" />
                                         </Button>
@@ -349,35 +396,55 @@ export default function NotificationBell({
                             </div>
                         ))}
 
+                        {/* Empty state mejorado */}
                         {totalDisplayed === 0 && !loading && (
-                            <div className="text-center text-sm text-muted-foreground py-8">
-                                {error ? 'Error al cargar notificaciones' : 'Sin notificaciones'}
+                            <div className="text-center py-12">
+                                <div className="relative mb-4">
+                                    <div className="absolute inset-0 gradient-stoneretail-light rounded-full blur-xl opacity-40 animate-pulse"></div>
+                                    <div className="relative bg-accent/30 rounded-2xl p-6 border border-border/30">
+                                        <Bell className="w-12 h-12 text-primary/60 mx-auto" />
+                                    </div>
+                                </div>
+                                <h3 className="font-semibold text-lg text-foreground mb-2">
+                                    {error ? 'Error de Conexión' : 'Todo al Día'}
+                                </h3>
+                                <p className="text-sm text-muted-foreground">
+                                    {error ? 'No se pudieron cargar las notificaciones' : 'No tienes notificaciones pendientes'}
+                                </p>
                             </div>
                         )}
 
+                        {/* Loading state mejorado */}
                         {loading && totalDisplayed === 0 && (
-                            <div className="flex justify-center py-8">
-                                <Loader2 className="h-6 w-6 animate-spin" />
+                            <div className="flex flex-col items-center justify-center py-12">
+                                <div className="relative">
+                                    <div className="absolute inset-0 bg-primary/20 rounded-full blur-md animate-pulse"></div>
+                                    <Loader2 className="relative h-8 w-8 animate-spin text-primary" />
+                                </div>
+                                <p className="text-sm text-muted-foreground mt-4">Cargando notificaciones...</p>
                             </div>
                         )}
                     </div>
                 </ScrollArea>
 
-                <DropdownMenuSeparator />
-                <div className="p-2">
+                {/* Footer mejorado */}
+                <div className="relative border-t border-border/30 p-3 bg-gradient-to-r from-accent/10 to-background">
+                    <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent"></div>
+
                     <Button
                         variant="outline"
-                        className="w-full"
+                        className="w-full rounded-xl border-2 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 group"
                         onClick={() => {
                             setOpen(false);
                             router.visit(NotificationController.index.url());
                         }}
                     >
-                        Ver todas
+                        <Eye className="w-4 h-4 mr-2 group-hover:text-primary transition-colors" />
+                        Ver todas las notificaciones
                         {payload && (displayedUnread.length + displayedRead.length) > totalDisplayed && (
-                            <span className="ml-1 text-xs">
-                                ({(payload.items.unread.length + payload.items.read.length) - totalDisplayed} más)
-                            </span>
+                            <Badge variant="secondary" className="ml-2 px-2 py-1 text-xs">
+                                +{(payload.items.unread.length + payload.items.read.length) - totalDisplayed}
+                            </Badge>
                         )}
                     </Button>
                 </div>
