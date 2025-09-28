@@ -3,16 +3,7 @@
 import * as React from 'react';
 import axios, { AxiosError } from 'axios';
 import {
-    Bell,
-    CheckCheck,
-    Loader2,
-    Trash2,
-    Sparkles,
-    Clock,
-    Eye,
-    Zap,
-
-    RefreshCcw
+    Bell, CheckCheck, Loader2, Trash2, Sparkles, Clock, Eye, RefreshCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +14,23 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { router } from '@inertiajs/react';
-import NotificationController from '@/actions/App/Http/Controllers/Notifications/NotificationController';
+
+// 👉 SI tienes Wayfinder generado (resources/js/routes/index.ts) descomenta esto:
+// import { route } from '@/routes';
+
+// ----------------------------------------------------------------------------------
+// Rutas (Wayfinder + fallback)
+// ----------------------------------------------------------------------------------
+const paths = {
+    // Backend JSON para la campana (dropdown)
+    dropdown: /* route ? route('notifications.dropdown') : */ '/notifications/dropdown',
+    markAll:  /* route ? route('notifications.mark-all') : */ '/notifications/read-all',
+    markOne: (id: string) => /* route ? route('notifications.mark', { id }) : */ `/notifications/${id}/read`,
+    destroy: (id: string) => /* route ? route('notifications.destroy', { id }) : */ `/notifications/${id}`,
+    index:    /* route ? route('notifications.index') : */ '/notifications',
+};
+
+// ----------------------------------------------------------------------------------
 
 type NotificationItem = {
     id: string;
@@ -44,13 +51,13 @@ type DropdownPayload = {
 const AXIOS_OPTS = {
     withCredentials: true,
     headers: { 'X-Requested-With': 'XMLHttpRequest' },
-    timeout: 10000 // 10 segundos de timeout
+    timeout: 10000,
 } as const;
 
-const POLL_INTERVAL = 60000; // 1 minuto
+const POLL_INTERVAL = 60000; // 1 min
 const MAX_DISPLAY_COUNT = 99;
 
-// Utility functions
+// Helpers
 const titleOf = (n: NotificationItem): string =>
     n.data?.title ?? (n.type.split('\\').pop() ?? 'Notificación');
 
@@ -63,7 +70,6 @@ const whenOf = (n: NotificationItem): string => {
         const now = new Date();
         const diffMs = now.getTime() - date.getTime();
         const diffMins = Math.floor(diffMs / 60000);
-
         if (diffMins < 1) return 'Ahora';
         if (diffMins < 60) return `Hace ${diffMins} min`;
         if (diffMins < 1440) return `Hace ${Math.floor(diffMins / 60)} h`;
@@ -80,134 +86,173 @@ interface NotificationBellProps {
     enablePolling?: boolean;
     maxNotifications?: number;
     onNotificationClick?: (notification: NotificationItem) => void;
+    // Si activaste Echo en tu app, puedes pasar el userId y set enableRealtime=true
+    enableRealtime?: boolean;
+    userId?: number;
 }
 
 export default function NotificationBell({
     enablePolling = false,
     maxNotifications = 20,
-    onNotificationClick
+    onNotificationClick,
+    enableRealtime = false,
+    userId,
 }: NotificationBellProps = {}) {
     const [open, setOpen] = React.useState(false);
     const [loading, setLoading] = React.useState(false);
     const [payload, setPayload] = React.useState<DropdownPayload | null>(null);
     const [error, setError] = React.useState<string | null>(null);
 
-    const pollIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+    // 👇 En el navegador, el id de intervalo es number
+    const pollIntervalRef = React.useRef<number | null>(null);
 
-    // Optimistic updates state
-    const [optimisticUpdates, setOptimisticUpdates] = React.useState<{
+    // Estado para optimistic updates
+    const [optimistic, setOptimistic] = React.useState<{
         markingAsRead: Set<string>;
         removing: Set<string>;
     }>({
         markingAsRead: new Set(),
-        removing: new Set()
+        removing: new Set(),
     });
 
     const load = React.useCallback(async (showToastOnError = false) => {
         setLoading(true);
         setError(null);
         try {
-            const { data } = await axios.get<DropdownPayload>('/api/notifications', AXIOS_OPTS);
+            const { data } = await axios.get<DropdownPayload>(paths.dropdown, AXIOS_OPTS);
             setPayload(data);
         } catch (err) {
-            const errorMessage = err instanceof AxiosError
-                ? err.response?.data?.message || 'Error al cargar notificaciones'
-                : 'Error de conexión';
-
+            const errorMessage =
+                err instanceof AxiosError
+                    ? err.response?.data?.message || 'Error al cargar notificaciones'
+                    : 'Error de conexión';
             setError(errorMessage);
-
-            if (showToastOnError) {
-                toast.error(errorMessage);
-            }
+            if (showToastOnError) toast.error(errorMessage);
         } finally {
             setLoading(false);
         }
-    }, [toast]);
+    }, []);
 
-    // Polling effect
+    const loadRef = React.useRef(load); // Crea una ref para la función load
+    const openRef = React.useRef(open); // Crea una ref para el estado 'open'
+
     React.useEffect(() => {
-        if (enablePolling) {
-            pollIntervalRef.current = setInterval(() => {
-                if (!open) load(); // Solo actualizar si el dropdown está cerrado
-            }, POLL_INTERVAL);
+        loadRef.current = load;
+        openRef.current = open;
+    });
 
-            return () => {
-                if (pollIntervalRef.current) {
-                    clearInterval(pollIntervalRef.current);
-                }
-            };
-        }
+    // Polling (solo cuando el dropdown está cerrado)
+    React.useEffect(() => {
+        if (!enablePolling) return;
+        pollIntervalRef.current = window.setInterval(() => {
+            if (!open) load();
+        }, POLL_INTERVAL);
+        return () => {
+            if (pollIntervalRef.current) window.clearInterval(pollIntervalRef.current);
+        };
     }, [enablePolling, load, open]);
 
+    // Carga inicial al abrir
     React.useEffect(() => {
         if (open) load(true);
     }, [open, load]);
 
+    // Realtime (opcional) – requiere broadcasting (Reverb/Pusher) y canal 'broadcast' en Notifications
+    React.useEffect(() => {
+        if (!enableRealtime || !userId) return;
+
+        const Echo = (window as any).Echo;
+        if (!Echo || !Echo.private) return;
+
+        const channelName = `App.Models.User.${userId}`;
+        const ch = Echo.private(channelName);
+
+        const handler = (notification: any) => {
+            setPayload((prev) => {
+                if (!prev) return prev;
+                const unread_count = prev.unread_count + 1;
+
+                // Usamos la ref para obtener el valor más reciente de 'open'
+                if (openRef.current) {
+                    // Usamos la ref para llamar a la función más reciente de 'load'
+                    loadRef.current();
+                }
+                return { ...prev, unread_count };
+            });
+        };
+
+        ch.notification(handler);
+
+        return () => {
+            try { ch.stopListening('.Illuminate\\Notifications\\Events\\BroadcastNotificationCreated'); } catch { }
+            try { Echo.leave(`private-${channelName}`); } catch { }
+        };
+    }, [enableRealtime, userId]); // <-- Dependencias correctas
     const unreadCount = payload?.unread_count ?? 0;
 
     const markAll = async () => {
         try {
-            await axios.post('/api/notifications/read-all', {}, AXIOS_OPTS);
+            await axios.post(paths.markAll, {}, AXIOS_OPTS);
             await load();
-            toast.success("Todas las notificaciones marcadas como leídas");
+            toast.success('Todas las notificaciones marcadas como leídas');
         } catch {
-            toast.error("No se pudieron marcar las notificaciones");
+            toast.error('No se pudieron marcar las notificaciones');
         }
     };
 
     const markOne = async (id: string) => {
-        // Optimistic update
-        setOptimisticUpdates(prev => ({
+        setOptimistic((prev) => ({
             ...prev,
-            markingAsRead: new Set([...prev.markingAsRead, id])
+            markingAsRead: new Set([...prev.markingAsRead, id]),
         }));
-
         try {
-            await axios.post(`/api/notifications/${id}/read`, {}, AXIOS_OPTS);
+            await axios.post(paths.markOne(id), {}, AXIOS_OPTS);
             await load();
         } catch {
-            toast.error("No se pudo marcar la notificación");
+            toast.error('No se pudo marcar la notificación');
         } finally {
-            setOptimisticUpdates(prev => ({
-                ...prev,
-                markingAsRead: new Set([...prev.markingAsRead].filter(item => item !== id))
-            }));
+            setOptimistic((prev) => {
+                const next = new Set(prev.markingAsRead);
+                next.delete(id);
+                return { ...prev, markingAsRead: next };
+            });
         }
     };
 
     const removeOne = async (id: string) => {
-        // Optimistic update
-        setOptimisticUpdates(prev => ({
+        setOptimistic((prev) => ({
             ...prev,
-            removing: new Set([...prev.removing, id])
+            removing: new Set([...prev.removing, id]),
         }));
-
         try {
-            await axios.delete(`/api/notifications/${id}`, AXIOS_OPTS);
-            await load();
+            await axios.delete(paths.destroy(id), AXIOS_OPTS);
+            await load(); // Recarga los datos para tener la fuente de verdad
         } catch {
-            toast.error("No se pudo eliminar la notificación");
-            // Revertir optimistic update
-            setOptimisticUpdates(prev => ({
-                ...prev,
-                removing: new Set([...prev.removing].filter(item => item !== id))
-            }));
+            toast.error('No se pudo eliminar la notificación');
+            // No es necesario limpiar aquí, el `finally` lo hará.
+            // Si la petición falla, `load()` no se ejecuta y la recarga no ocurre,
+            // así que el item volverá a aparecer con opacidad normal.
+        } finally {
+            // Esto se ejecuta siempre, con éxito o con error.
+            setOptimistic((prev) => {
+                const next = new Set(prev.removing);
+                next.delete(id);
+                return { ...prev, removing: next };
+            });
         }
     };
 
     const handleNotificationClick = (notification: NotificationItem) => {
         onNotificationClick?.(notification);
-        if (!notification.read_at) {
-            markOne(notification.id);
-        }
+        if (!notification.read_at) markOne(notification.id);
     };
 
     const displayedUnread = (payload?.items.unread ?? [])
-        .filter(n => !optimisticUpdates.removing.has(n.id))
+        .filter((n) => !optimistic.removing.has(n.id))
         .slice(0, maxNotifications);
 
     const displayedRead = (payload?.items.read ?? [])
-        .filter(n => !optimisticUpdates.removing.has(n.id))
+        .filter((n) => !optimistic.removing.has(n.id))
         .slice(0, maxNotifications);
 
     const totalDisplayed = displayedUnread.length + displayedRead.length;
@@ -224,12 +269,9 @@ export default function NotificationBell({
                     <Bell className="h-5 w-5 relative z-10 group-hover:animate-pulse" />
                     {unreadCount > 0 && (
                         <>
-                            <Badge
-                                className="absolute -top-2 -right-2 px-1.5 py-0.5 text-[10px] font-bold leading-none animate-bounce bg-primary hover:bg-primary text-primary-foreground border-2 border-background shadow-lg min-w-[20px] h-5 flex items-center justify-center"
-                            >
+                            <Badge className="absolute -top-2 -right-2 px-1.5 py-0.5 text-[10px] font-bold leading-none animate-bounce bg-primary hover:bg-primary text-primary-foreground border-2 border-background shadow-lg min-w-[20px] h-5 flex items-center justify-center">
                                 {formatUnreadCount(unreadCount)}
                             </Badge>
-                            {/* Efecto de pulso */}
                             <div className="absolute -top-2 -right-2 w-5 h-5 bg-primary/30 rounded-full animate-ping"></div>
                         </>
                     )}
@@ -240,10 +282,8 @@ export default function NotificationBell({
             </DropdownMenuTrigger>
 
             <DropdownMenuContent align="end" className="w-96 p-0 rounded-2xl border-2 border-border/50 shadow-2xl backdrop-blur-sm bg-background/95">
-                {/* Header mejorado */}
                 <div className="relative bg-gradient-to-r from-primary/10 via-accent/20 to-primary/10 px-4 py-3 border-b border-border/30">
                     <div className="absolute top-0 left-0 right-0 h-1 gradient-stoneretail"></div>
-
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <div className="bg-primary/20 rounded-lg p-1.5 border border-primary/30">
@@ -267,11 +307,7 @@ export default function NotificationBell({
                                 disabled={loading}
                                 className="h-8 px-3 rounded-lg hover:bg-primary/15 hover:text-primary transition-all duration-200"
                             >
-                                {loading ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                    <RefreshCcw className="h-4 w-4" />
-                                )}
+                                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
                             </Button>
                             <Button
                                 variant="ghost"
@@ -289,15 +325,13 @@ export default function NotificationBell({
 
                 <ScrollArea className="h-[380px] scrollbar-stoneretail">
                     <div className="p-3 space-y-2">
-                        {/* Unread notifications mejoradas */}
                         {displayedUnread.map((n) => (
                             <div
                                 key={n.id}
-                                className={`group relative rounded-xl border-2 border-amber-200/50 dark:border-amber-700/30 p-3 bg-gradient-to-r from-amber-50/80 to-primary/5 dark:from-amber-950/20 dark:to-primary/5 cursor-pointer transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:border-primary/30 hover:scale-[1.02] ${optimisticUpdates.removing.has(n.id) ? 'opacity-50' : ''}`}
+                                className={`group relative rounded-xl border-2 border-amber-200/50 dark:border-amber-700/30 p-3 bg-gradient-to-r from-amber-50/80 to-primary/5 dark:from-amber-950/20 dark:to-primary/5 cursor-pointer transition-all duration-300 hover:shadow-lg hover:shadow-primary/10 hover:border-primary/30 hover:scale-[1.02] ${optimistic.removing.has(n.id) ? 'opacity-50' : ''}`}
                                 onClick={() => handleNotificationClick(n)}
                             >
                                 <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl"></div>
-
                                 <div className="relative flex items-start justify-between">
                                     <div className="pr-3 flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
@@ -320,15 +354,12 @@ export default function NotificationBell({
                                         <Button
                                             size="icon"
                                             variant="ghost"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                markOne(n.id);
-                                            }}
-                                            disabled={optimisticUpdates.markingAsRead.has(n.id)}
+                                            onClick={(e) => { e.stopPropagation(); markOne(n.id); }}
+                                            disabled={optimistic.markingAsRead.has(n.id)}
                                             title="Marcar leída"
                                             className="h-7 w-7 rounded-lg hover:bg-emerald-100 hover:text-emerald-700 transition-all duration-200"
                                         >
-                                            {optimisticUpdates.markingAsRead.has(n.id) ? (
+                                            {optimistic.markingAsRead.has(n.id) ? (
                                                 <Loader2 className="h-3 w-3 animate-spin" />
                                             ) : (
                                                 <CheckCheck className="h-3 w-3" />
@@ -337,11 +368,8 @@ export default function NotificationBell({
                                         <Button
                                             size="icon"
                                             variant="ghost"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                removeOne(n.id);
-                                            }}
-                                            disabled={optimisticUpdates.removing.has(n.id)}
+                                            onClick={(e) => { e.stopPropagation(); removeOne(n.id); }}
+                                            disabled={optimistic.removing.has(n.id)}
                                             title="Eliminar"
                                             className="h-7 w-7 rounded-lg hover:bg-red-100 hover:text-red-700 transition-all duration-200"
                                         >
@@ -352,11 +380,10 @@ export default function NotificationBell({
                             </div>
                         ))}
 
-                        {/* Read notifications mejoradas */}
                         {displayedRead.map((n) => (
                             <div
                                 key={n.id}
-                                className={`group relative rounded-xl border border-border/30 p-3 bg-card/50 backdrop-blur-sm cursor-pointer transition-all duration-300 hover:shadow-md hover:shadow-primary/5 hover:border-primary/20 hover:bg-accent/20 ${optimisticUpdates.removing.has(n.id) ? 'opacity-50' : ''}`}
+                                className={`group relative rounded-xl border border-border/30 p-3 bg-card/50 backdrop-blur-sm cursor-pointer transition-all duration-300 hover:shadow-md hover:shadow-primary/5 hover:border-primary/20 hover:bg-accent/20 ${optimistic.removing.has(n.id) ? 'opacity-50' : ''}`}
                                 onClick={() => handleNotificationClick(n)}
                             >
                                 <div className="flex items-start justify-between">
@@ -381,11 +408,8 @@ export default function NotificationBell({
                                         <Button
                                             size="icon"
                                             variant="ghost"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                removeOne(n.id);
-                                            }}
-                                            disabled={optimisticUpdates.removing.has(n.id)}
+                                            onClick={(e) => { e.stopPropagation(); removeOne(n.id); }}
+                                            disabled={optimistic.removing.has(n.id)}
                                             title="Eliminar"
                                             className="h-7 w-7 rounded-lg hover:bg-red-100 hover:text-red-700 transition-all duration-200"
                                         >
@@ -396,7 +420,6 @@ export default function NotificationBell({
                             </div>
                         ))}
 
-                        {/* Empty state mejorado */}
                         {totalDisplayed === 0 && !loading && (
                             <div className="text-center py-12">
                                 <div className="relative mb-4">
@@ -414,7 +437,6 @@ export default function NotificationBell({
                             </div>
                         )}
 
-                        {/* Loading state mejorado */}
                         {loading && totalDisplayed === 0 && (
                             <div className="flex flex-col items-center justify-center py-12">
                                 <div className="relative">
@@ -427,23 +449,21 @@ export default function NotificationBell({
                     </div>
                 </ScrollArea>
 
-                {/* Footer mejorado */}
                 <div className="relative border-t border-border/30 p-3 bg-gradient-to-r from-accent/10 to-background">
                     <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent"></div>
-
                     <Button
                         variant="outline"
                         className="w-full rounded-xl border-2 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 group"
                         onClick={() => {
                             setOpen(false);
-                            router.visit(NotificationController.index.url());
+                            router.visit(paths.index); // 👈 sin importar controllers PHP en el front
                         }}
                     >
                         <Eye className="w-4 h-4 mr-2 group-hover:text-primary transition-colors" />
                         Ver todas las notificaciones
-                        {payload && (displayedUnread.length + displayedRead.length) > totalDisplayed && (
+                        {payload && (displayedUnread.length + displayedRead.length) < (payload.items.unread.length + payload.items.read.length) && (
                             <Badge variant="secondary" className="ml-2 px-2 py-1 text-xs">
-                                +{(payload.items.unread.length + payload.items.read.length) - totalDisplayed}
+                                +{(payload.items.unread.length + payload.items.read.length) - (displayedUnread.length + displayedRead.length)}
                             </Badge>
                         )}
                     </Button>

@@ -1,6 +1,7 @@
 // resources/js/components/layout/header-right.tsx
 import * as React from 'react';
-
+import { type SharedData } from '@/types';
+import { Head, Link, usePage } from '@inertiajs/react';
 // ✅ Usa TUS componentes de tema:
 import AppearanceToggleDropdown from '@/components/appearance-dropdown';
 import AppearanceToggleTab from '@/components/appearance-tabs';
@@ -9,6 +10,7 @@ import AppearanceToggleTab from '@/components/appearance-tabs';
 import NotificationBell from './notifications/notification-bell';
 
 export default function HeaderRight({ children }: { children?: React.ReactNode }) {
+    const { auth } = usePage<SharedData>().props;
     return (
         <div className="ml-auto flex items-center gap-2">
             {/* StoreSwitcher viene aquí como children */}
@@ -26,7 +28,7 @@ export default function HeaderRight({ children }: { children?: React.ReactNode }
 
             {/* Campana de alertas */}
             <div className='mr-3'>
-                <NotificationBell />
+                <NotificationBell enablePolling userId={auth.user.id} />
             </div>
         </div>
     );

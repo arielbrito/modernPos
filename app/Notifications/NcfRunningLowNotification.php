@@ -2,15 +2,17 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\HasDynamicChannels;
 use Illuminate\Bus\Queueable;
 use Illuminate\Support\Collection;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 
-class NcfRunningLowNotification extends Notification implements ShouldQueue
+class NcfRunningLowNotification extends Notification implements ShouldQueue, ShouldBroadcast
 {
-    use Queueable;
+    use Queueable, HasDynamicChannels;
 
     public function __construct(
         protected Collection $sequences,
@@ -66,5 +68,10 @@ class NcfRunningLowNotification extends Notification implements ShouldQueue
         }
 
         return $mail;
+    }
+
+    public function toBroadcast(object $notifiable): \Illuminate\Notifications\Messages\BroadcastMessage
+    {
+        return new \Illuminate\Notifications\Messages\BroadcastMessage($this->toArray($notifiable));
     }
 }

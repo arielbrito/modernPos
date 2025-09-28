@@ -1,5 +1,7 @@
 <?php
 
+use App\Services\Alerts\LowStockAlert;
+use App\Services\Alerts\NcfAlert;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -9,20 +11,19 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 
-// Stock bajo cada 10 minutos
 Schedule::call(function () {
-    app(\App\Services\Alerts\LowStockAlert::class)->run();
+    app(LowStockAlert::class)->run();
 })
-    ->everyOddHour()
-    ->name('low-stock-alert') // <-- AÑADE ESTA LÍNEA
+    ->everyTwoHours() // <-- CAMBIO: De everyTenSeconds() a una frecuencia razonable
+    ->name('low-stock-alert')
     ->withoutOverlapping()
     ->onOneServer();
 
-// NCF próximos a agotarse cada 15 minutos
+// NCF próximos a agotarse cada 2 horas
 Schedule::call(function () {
-    app(\App\Services\Alerts\NcfAlert::class)->run();
+    app(NcfAlert::class)->run();
 })
-    ->everyFifteenMinutes()
-    ->name('ncf-alert') // <-- AÑADE ESTA LÍNEA
+    ->everyTwoHours() // <-- CAMBIO: De everyTenSeconds() a una frecuencia razonable
+    ->name('ncf-alert')
     ->withoutOverlapping()
     ->onOneServer();

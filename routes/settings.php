@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Notifications\AlertSettingController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\RoleController;
@@ -38,4 +39,8 @@ Route::middleware('auth')->group(function () {
         ->only(['index', 'show', 'create', 'store', 'destroy', 'edit', 'update']);
 
     Route::resource('settings/roles', RoleController::class);
+
+
+    Route::get('alerts/settings', [AlertSettingController::class, 'edit'])->name('alerts.settings.edit')->middleware('permissions:settings');
+    Route::get('alerts/settings', [AlertSettingController::class, 'update'])->name('alerts.settings.update')->middleware('permissions:settings');
 });

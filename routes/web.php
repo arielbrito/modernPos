@@ -111,14 +111,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/api/ncf/default-type', [NcfApiController::class, 'defaultType'])->name('api.ncf.default');
         Route::post('/api/ncf/consume', [NcfApiController::class, 'consume'])->name('api.ncf.consume');
 
-        //Notificaciones
-        Route::get('/api/notifications', [NotificationController::class, 'dropdown'])->name('api.notifications.dropdown');
-        Route::post('/api/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('api.notifications.read_all');
-        Route::post('/api/notifications/{id}/read', [NotificationController::class, 'markRead'])->name('api.notifications.read');
-        Route::delete('/api/notifications/{id}', [NotificationController::class, 'destroy'])->name('api.notifications.delete');
+        Route::get('/notifications', [NotificationController::class, 'index'])
+            ->name('notifications.index');
 
-        // Página completa
-        Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+        // JSON para la campana (dropdown)
+        Route::get('/notifications/dropdown', [NotificationController::class, 'dropdown'])
+            ->name('notifications.dropdown');
+
+        // Marcar todas como leídas
+        Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])
+            ->name('notifications.mark-all');
+
+        // Marcar una como leída
+        Route::post('/notifications/{id}/read', [NotificationController::class, 'markRead'])
+            ->name('notifications.mark');
+
+        // Eliminar una
+        Route::delete('/notifications/{id}', [NotificationController::class, 'destroy'])
+            ->name('notifications.destroy');
 
 
 
