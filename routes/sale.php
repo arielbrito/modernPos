@@ -22,5 +22,8 @@ Route::get('/sales/{sale}/pdf', [SalePrintController::class, 'pdf'])
 Route::get('/sales/{sale}/print', [SalePrintController::class, 'print'])
     ->name('sales.print');
 
+route::get('/sales/{sale}', [SaleController::class, 'receipt'])
+    ->name('sales.receipt');
+
 Route::get('/sales/export/csv',  [SaleExportController::class, 'csv'])->name('sales.export.csv');
 Route::get('/sales/export/xlsx', [SaleExportController::class, 'xlsx'])->name('sales.export.xlsx');

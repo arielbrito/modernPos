@@ -182,17 +182,17 @@ class SaleController extends Controller
 
             $sale = $svc->create($data, $req->user()->id);
 
-            $sale->load([
-                'lines',
-                'payments',
-                'customer:id,name,email',
-                'user:id,name',
-                'store:id,name'
-            ]);
+            // $sale->load([
+            //     'lines',
+            //     'payments',
+            //     'customer:id,name,email',
+            //     'user:id,name',
+            //     'store:id,name'
+            // ]);
 
             return to_route('pos.index')->with([
                 'success' => "Venta #{$sale->number} registrada.",
-                'sale'    => $sale,
+                'completed_sale_id' => (int) $sale->id,
             ]);
         } catch (\Throwable $th) {
 
@@ -214,5 +214,18 @@ class SaleController extends Controller
         return Inertia::render('sales/show', [
             'sale' => $sale,
         ]);
+    }
+
+    public function receipt(Sale $sale)
+    {
+        $sale->load([
+            'lines',
+            'payments',
+            'customer:id,name,email',
+            'user:id,name',
+            'store:id,name',
+        ]);
+
+        return response()->json(['sale' => $sale]);
     }
 }

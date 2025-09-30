@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import SaleController from '@/actions/App/Http/Controllers/Sales/SaleController';
+import sales from '@/routes/sales';
 import { type Page } from '@inertiajs/core';
 import { router } from '@inertiajs/react';
 import { useCallback, useState } from 'react';
@@ -63,8 +64,29 @@ export function usePosSaleProcessor({ context, cart, customer, ncfInfo, onSucces
         setIsProcessing(true);
         router.post(SaleController.store.url(), payload, {
             preserveScroll: true,
-            onSuccess: (page: Page) => {
-                const completedSale = (page.props as any).flash?.sale as SaleData | undefined;
+            onSuccess: async (page: Page) => {
+                const flash: any = (page.props as any).flash ?? {};
+                const saleId = flash.completed_sale_id as number | undefined;
+
+                if (saleId) {
+                    try {
+                        const res = await fetch(sales.receipt.url({ sale: saleId }), {
+                            credentials: 'same-origin',
+                            headers: { Accept: 'application/json' },
+                        });
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        const data = await res.json();
+                        onSuccess(data.sale ?? null);
+                    } catch (e) {
+                        console.error(e);
+                        toast.error('Venta registrada, pero no pude cargar el recibo.');
+                        onSuccess(null);
+                    }
+                    return;
+                }
+
+                // Fallback por si más adelante decides flashear un DTO pequeño
+                const completedSale = flash.sale as SaleData | undefined;
                 onSuccess(completedSale ?? null);
             },
             onError: (errors) => {
