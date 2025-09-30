@@ -57,6 +57,7 @@ interface ReceiptSettings {
     email?: string;
     website?: string;
     logo_path?: string;
+    logo_url?: string;
     footer_message?: string;
     terms_and_conditions?: string;
 }
@@ -98,9 +99,9 @@ const ReceiptTemplate = React.forwardRef<HTMLDivElement, { sale: SaleData, setti
             <div ref={ref} className="w-[80mm] mx-auto text-[11px] font-mono text-slate-900 p-2 bg-white">
                 {/* --- Encabezado de la Empresa --- */}
                 <header className="text-center mb-3">
-                    {settings.logo_path && (
+                    {settings.logo_url && (
                         <img
-                            src={`/storage/${settings.logo_path}`}
+                            src={settings.logo_url}
                             alt="Logo de la empresa"
                             className="w-32 h-auto max-h-20 object-contain mx-auto mb-2"
                         />
