@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import Decimal from 'decimal.js';
 import {
     CreditCard,
     Banknote,
@@ -248,26 +249,33 @@ export function PaymentDialog({
 
 
 
-    const toSaleCcy = useCallback((amt: number, ccy: string, fxRate?: number) =>
-        ccy === saleCurrency ? amt : (fxRate ?? defaultFx[ccy] ?? 1) * amt,
-        [saleCurrency, defaultFx]
-    );
+    const toSaleCcy = useCallback((amt: number | string, ccy: string, fxRate?: number) => {
+        const amountDecimal = new Decimal(amt);
+        if (ccy === saleCurrency) {
+            return amountDecimal;
+        }
+        const rate = new Decimal(fxRate ?? defaultFx[ccy] ?? 1);
+        return amountDecimal.times(rate);
+    }, [saleCurrency, defaultFx]);
 
     const paidInSale = useMemo(() =>
-        payments.reduce((s, p) => s + toSaleCcy(p.amount, p.currency_code, p.fx_rate_to_sale), 0),
-        [payments, toSaleCcy]
+        payments.reduce((sum, p) =>
+            sum.plus(toSaleCcy(p.amount, p.currency_code, p.fx_rate_to_sale)),
+            new Decimal(0) // Empezamos con un Decimal(0)
+        ), [payments, toSaleCcy]
     );
 
     const totalChangeInSaleCcy = useMemo(() =>
-        payments.filter(p => p.method === 'cash').reduce((s, p) => {
+        payments.filter(p => p.method === 'cash').reduce((sum, p) => {
             const changeAmt = p.change_amount ?? 0;
             const ccy = p.change_currency_code ?? p.currency_code;
-            return s + toSaleCcy(changeAmt, ccy, p.fx_rate_to_sale);
-        }, 0),
+            return sum.plus(toSaleCcy(changeAmt, ccy, p.fx_rate_to_sale));
+        }, new Decimal(0)),
         [payments, toSaleCcy]);
 
-    const remaining = Math.max(0, total - paidInSale);
-    const isComplete = remaining < 0.01;
+    const totalDecimal = new Decimal(total);
+    const remaining = totalDecimal.minus(paidInSale);
+    const isComplete = remaining.lessThanOrEqualTo(0.005);
 
     useEffect(() => {
         if (isOpen) {
@@ -277,10 +285,13 @@ export function PaymentDialog({
     }, [isOpen]);
 
     useEffect(() => {
-        if (remaining > 0) {
-            const fxNum = currency === saleCurrency ? 1 : (parseFloat(fx) || defaultFx[currency] || 1);
-            const remainingInSelectedCcy = remaining / fxNum;
-            setAmount(remainingInSelectedCcy.toFixed(2));
+        // --- LA CORRECCIÓN ESTÁ AQUÍ ---
+        if (remaining.greaterThan(0)) { // Usamos greaterThan(0) en lugar de isPositive()
+            const fxNum = currency === saleCurrency ? new Decimal(1) : new Decimal(parseFloat(fx) || defaultFx[currency] || 1);
+            const remainingInSelectedCcy = remaining.dividedBy(fxNum);
+            setAmount(remainingInSelectedCcy.toDP(2).toString());
+        } else {
+            setAmount('0.00'); // Limpiamos el monto si ya no hay faltante
         }
     }, [method, currency, remaining, fx, saleCurrency, defaultFx]);
 
@@ -298,14 +309,14 @@ export function PaymentDialog({
     };
 
     const addPayment = () => {
-        const amt = parseFloat(amount) || 0;
-        if (amt <= 0) return;
+        const amt = new Decimal(parseFloat(amount) || 0);
+        if (amt.isZero() || amt.isNegative()) return;
 
         const fxNum = currency === saleCurrency ? undefined : (parseFloat(fx) || defaultFx[currency] || undefined);
 
         const newPayment: UIPayment = {
             method,
-            amount: amt,
+            amount: amt.toNumber(),
             currency_code: currency,
             fx_rate_to_sale: fxNum,
             reference: reference?.trim() || null,
@@ -315,21 +326,19 @@ export function PaymentDialog({
         };
 
         if (method === 'cash') {
-            let tender = parseFloat(tendered);
-            if (isNaN(tender) || tender < amt) {
-                tender = amt;
-            }
+            const tender = new Decimal(parseFloat(tendered) || 0);
+            const finalTender = tender.lessThan(amt) ? amt : tender;
 
-            const changeInPayCcy = Math.max(0, tender - amt);
+            const changeInPayCcy = finalTender.minus(amt);
             let finalChangeAmount = changeInPayCcy;
 
-            if (changeCcy !== currency) {
-                const rate = parseFloat(fx) || defaultFx[currency] || 1;
-                finalChangeAmount = changeInPayCcy * rate;
+            if (changeCcy === saleCurrency) {
+                const rate = new Decimal(fxNum || 1);
+                finalChangeAmount = changeInPayCcy.times(rate);
             }
 
-            newPayment.tendered_amount = parseFloat(tender.toFixed(2));
-            newPayment.change_amount = parseFloat(finalChangeAmount.toFixed(2));
+            newPayment.tendered_amount = finalTender.toDP(2).toNumber();
+            newPayment.change_amount = finalChangeAmount.toDP(2).toNumber();
             newPayment.change_currency_code = changeCcy;
         }
 
@@ -347,7 +356,7 @@ export function PaymentDialog({
 
     const confirm = () => {
         if (!isComplete) return;
-        onSubmit(payments, totalChangeInSaleCcy);
+        onSubmit(payments, totalChangeInSaleCcy.toNumber());
     };
 
     return (
@@ -624,7 +633,7 @@ export function PaymentDialog({
 
                     {/* Panel de resumen de pagos */}
                     <div className="h-full flex flex-col">
-                        <PaymentSummary payments={payments} onRemove={removePayment} saleCurrency={saleCurrency} toSaleCcy={toSaleCcy} />
+                        <PaymentSummary payments={payments} onRemove={removePayment} saleCurrency={saleCurrency} toSaleCcy={(amt: any, ccy: any, fx: any) => toSaleCcy(amt, ccy, fx).toNumber()} />
                     </div>
                 </div>
 
@@ -647,8 +656,8 @@ export function PaymentDialog({
                                             ? "text-emerald-600 dark:text-emerald-400"
                                             : "text-amber-600 dark:text-amber-400"
                                     )}>
-                                        {isComplete ? '0.00' : remaining.toFixed(2)}
-                                        <span className="text-lg font-medium text-muted-foreground ml-2">
+                                        {isComplete ? '0.00' : remaining.toDP(2).toString()}
+                                        <span className="text-lg ...">
                                             {saleCurrency}
                                         </span>
                                     </div>
@@ -662,8 +671,8 @@ export function PaymentDialog({
 
                                 {/* Información adicional */}
                                 <div className="hidden lg:block space-y-2 text-sm text-muted-foreground">
-                                    <div>Pagado: <span className="font-semibold text-foreground">{paidInSale.toFixed(2)} {saleCurrency}</span></div>
-                                    <div>Total: <span className="font-semibold text-primary">{total.toFixed(2)} {saleCurrency}</span></div>
+                                    <div>Pagado: <span className="font-semibold ...">{paidInSale.toDP(2).toString()} {saleCurrency}</span></div>
+                                    <div>Total: <span className="font-semibold ...">{totalDecimal.toDP(2).toString()} {saleCurrency}</span></div>
                                 </div>
                             </div>
                             {canSellOnCredit ? (

@@ -267,10 +267,17 @@ export interface Denomination {
     currency_code: string;
 }
 
+type AppContext = {
+    active_store_id: number | null;
+    active_register: { id: number; name: string; store_id: number } | null;
+    active_shift_id: number | null;
+};
+
 export type PageProps<T extends Record<string, unknown> = Record<string, unknown>> = T & {
     auth: {
         user: User;
     };
+    context: AppContext;
 };
 
 export interface Attachment {
@@ -364,6 +371,7 @@ export interface Paginated<T> {
 }
 
 export interface InventoryAdjustment {
+    items: any;
     id: number;
     code: string;
     reason: string;

@@ -59,6 +59,13 @@ class AuthenticatedSessionController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
+        $activeShiftId = $request->session()->get('active_shift_id');
+
+        if ($activeShiftId) {
+            // Redirigimos al usuario de vuelta a donde estaba con un mensaje de error.
+            return back()->with('error', 'No puedes cerrar sesión. Tienes un turno de caja activo.');
+        }
+
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();

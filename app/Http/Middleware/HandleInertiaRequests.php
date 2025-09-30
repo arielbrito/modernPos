@@ -71,6 +71,7 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => fn() => Session::get('success'),
                 'error' => fn() => Session::get('error'),
+                'sale' => fn() => Session::get('sale'),
             ],
             'pos' => [
                 'last_sale' => fn() => $request->session()->pull('pos.last_sale'), // pull = una sola vez

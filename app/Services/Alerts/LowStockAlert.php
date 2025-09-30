@@ -43,20 +43,19 @@ class LowStockAlert
             $allSettings = $this->settings->getForUsers($candidates);
 
             // Filtra candidatos por preferencia "low_stock_enabled" y filtro de tiendas
-            $recipients = $candidates->filter(function (User $u) use ($store, $allSettings) {
-                $userSettings = $allSettings->get($u->id);
-                if (!(bool)($userSettings['low_stock_enabled'] ?? true)) return false;
+            $recipients = $candidates->filter(function (User $user) use ($store, $allSettings) {
+                $userSettings = $allSettings->get($user->id);
 
-                $overrides = $userSettings['overrides'] ?? null;
-                $filter = null;
-                if (is_array($overrides)) {
-                    $s = $overrides['stores']['low_stock'] ?? null;
-                    if (is_array($s) && !empty($s)) {
-                        $filter = array_values(array_unique(array_map('intval', $s)));
-                    }
+                // 1. Revisa si la alerta está habilitada para el usuario
+                if (!$this->settings->lowStockEnabled($user, $userSettings)) {
+                    return false;
                 }
 
-                return $filter ? in_array((int)$store->id, $filter, true) : true;
+                // 2. AHORA: Delega la lógica de filtrado de tiendas a AlertSettings
+                $storeFilter = $this->settings->storeFilter($user, 'low_stock', $userSettings);
+
+                // Si hay un filtro, el store actual debe estar en él. Si no hay filtro, pasa.
+                return $storeFilter ? in_array($store->id, $storeFilter, true) : true;
             });
 
 

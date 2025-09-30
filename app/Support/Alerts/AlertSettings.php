@@ -13,23 +13,27 @@ use Illuminate\Support\Collection;
 class AlertSettings
 {
     public const DEFAULTS = [
-        'low_stock_enabled' => true,
-        'ncf_enabled'       => true,
+        'low_stock_enabled'   => true,
+        'ncf_enabled'         => true,
         'low_stock_threshold' => 3,
         'ncf_threshold'       => 50,
-        'channels'            => ['database'], // agrega 'mail' y/o 'broadcast' según el usuario
-        'overrides'           => null,         // ej: ["stores":{"low_stock":[1,2], "ncf":[1]}]
+        'channels'            => ['database'],
+        'overrides'           => ['stores' => ['low_stock' => [], 'ncf' => []]],
+        'quiet_hours'         => ['start' => null, 'end' => null, 'tz' => null],
     ];
 
     public function get(User $user): array
     {
-        // CAMBIO: Se eliminó la comprobación ineficiente de Schema::hasTable
-        $row = UserAlertSetting::firstOrCreate(
-            ['user_id' => $user->id],
-            self::DEFAULTS + ['user_id' => $user->id]
-        );
+        $settings = $user->alertSettings;
 
-        return array_replace(self::DEFAULTS, $row->only(array_keys(self::DEFAULTS)));
+        if (!$settings) {
+            // Si el usuario no tiene settings, los creamos con los valores por defecto.
+            // Esto asegura que la relación $user->alertSettings no sea nula en futuras llamadas.
+            $settings = $user->alertSettings()->create(self::DEFAULTS);
+        }
+
+        // Combinamos los valores por defecto con los guardados para asegurar que todos los campos existan.
+        return array_replace_recursive(self::DEFAULTS, $settings->toArray());
     }
 
     /**
@@ -45,67 +49,54 @@ class AlertSettings
         }
 
         $userIds = $users->pluck('id');
+        // Eager-load las configuraciones y las mapea por user_id para un acceso rápido.
         $settings = UserAlertSetting::whereIn('user_id', $userIds)->get()->keyBy('user_id');
 
         return $users->mapWithKeys(function ($user) use ($settings) {
             $userSettings = $settings->get($user->id);
-            $finalSettings = self::DEFAULTS;
-
-            if ($userSettings) {
-                $finalSettings = array_replace(self::DEFAULTS, $userSettings->only(array_keys(self::DEFAULTS)));
-            }
+            // Si un usuario no tiene settings, se le asignan los por defecto.
+            $finalSettings = $userSettings
+                ? array_replace_recursive(self::DEFAULTS, $userSettings->toArray())
+                : self::DEFAULTS;
 
             return [$user->id => $finalSettings];
         });
     }
 
-    public function lowStockEnabled(User $user): bool
+    public function lowStockEnabled(User $user, ?array $settings = null): bool
     {
-        return (bool)($this->get($user)['low_stock_enabled'] ?? true);
+        $settings = $settings ?? $this->get($user);
+        return (bool)($settings['low_stock_enabled'] ?? true);
     }
 
-    public function ncfEnabled(User $user): bool
+    public function ncfEnabled(User $user, ?array $settings = null): bool
     {
-        return (bool)($this->get($user)['ncf_enabled'] ?? true);
+        $settings = $settings ?? $this->get($user);
+        return (bool)($settings['ncf_enabled'] ?? true);
     }
 
-    public function threshold(User $user, string $kind, int $fallback): int
+    public function threshold(User $user, string $kind, ?array $settings = null): int
     {
-        $prefs = $this->get($user);
-        if ($kind === 'low_stock') {
-            return (int)($prefs['low_stock_threshold'] ?? $fallback);
+        $settings = $settings ?? $this->get($user);
+        $key = "{$kind}_threshold"; // e.g., 'low_stock_threshold'
+        return (int)($settings[$key] ?? self::DEFAULTS[$key]);
+    }
+
+    public function channels(User $user, ?array $settings = null): array
+    {
+        $settings = $settings ?? $this->get($user);
+        return (array)($settings['channels'] ?? ['database']);
+    }
+
+    public function storeFilter(User $user, string $kind, ?array $settings = null): ?array
+    {
+        $settings = $settings ?? $this->get($user);
+        $storeIds = $settings['overrides']['stores'][$kind] ?? null;
+
+        if (empty($storeIds)) {
+            return null; // Si no hay filtro, se aplica a todas las tiendas.
         }
-        if ($kind === 'ncf') {
-            return (int)($prefs['ncf_threshold'] ?? $fallback);
-        }
-        return $fallback;
-    }
 
-    /**
-     * Canales por usuario para cualquier tipo de alerta.
-     * Retorna array como ['database','mail','broadcast'].
-     */
-    public function channels(User $user, string $kind): array
-    {
-        $prefs = $this->get($user);
-        $channels = (array)($prefs['channels'] ?? ['database']);
-        // Aquí podrías aplicar reglas por tipo si quisieras
-        return array_values(array_unique($channels));
-    }
-
-    /**
-     * Filtro de tiendas por tipo de alerta (si el usuario lo configuró).
-     * Devuelve array<int> de store_ids o null si no hay filtro.
-     */
-    public function storeFilter(User $user, string $kind): ?array
-    {
-        $prefs = $this->get($user);
-        $overrides = $prefs['overrides'] ?? null;
-        if (!is_array($overrides)) return null;
-
-        $stores = $overrides['stores'][$kind] ?? null;
-        if (!is_array($stores) || empty($stores)) return null;
-
-        return array_values(array_unique(array_map('intval', $stores)));
+        return array_values(array_unique(array_map('intval', $storeIds)));
     }
 }

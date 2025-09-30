@@ -1,6 +1,6 @@
 <?php
 
-
+use App\Http\Middleware\EnsureUserHasActiveShift;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
@@ -30,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role'               => RoleMiddleware::class,
             'permission'         => PermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
+            'has.active.shift'   => EnsureUserHasActiveShift::class,
 
         ]);
     })

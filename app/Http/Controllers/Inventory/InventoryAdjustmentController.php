@@ -15,6 +15,7 @@ use App\Models\InventoryAdjustment; // <-- Añadir import
 use Illuminate\Support\Carbon; // <-- Añadir import
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class InventoryAdjustmentController extends Controller
 {
@@ -158,9 +159,31 @@ class InventoryAdjustmentController extends Controller
         }
 
         // Redirigimos a la misma página para que el usuario vea el stock actualizado
-        return redirect()->route('inventory.adjustments.bulk.create')
+        return redirect()->route('inventory.adjustments.index')
             ->with('success', 'Ajuste de inventario guardado exitosamente.');
     }
 
-    // Aquí podrías añadir los métodos index() y show() para ver los ajustes históricos.
+    public function show(InventoryAdjustment $adjustment)
+    {
+        $adjustment->load(['store:id,name', 'user:id,name', 'items.variant.product']);
+
+        return Inertia::render('inventory/adjustments/show', [
+            'adjustment' => $adjustment,
+        ]);
+    }
+
+    /**
+     * Genera una vista de impresión en PDF para el ajuste.
+     */
+    public function print(InventoryAdjustment $adjustment)
+    {
+        $adjustment->load(['store', 'user', 'items.variant.product']);
+
+        $pdf = Pdf::loadView('prints.inventory_adjustment', [
+            'adjustment' => $adjustment
+        ]);
+
+        // (Opcional) Puedes usar ->download() para forzar la descarga
+        return $pdf->stream("ajuste-{$adjustment->code}.pdf");
+    }
 }

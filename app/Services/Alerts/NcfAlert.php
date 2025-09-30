@@ -29,8 +29,7 @@ class NcfAlert
 
         // Filtra por quienes tienen NCF habilitado
         $recipients = $candidates->filter(
-            fn(User $u) =>
-            (bool)($allSettings->get($u->id)['ncf_enabled'] ?? true)
+            fn(User $u) => $this->settings->ncfEnabled($u, $allSettings->get($u->id))
         );
         if ($recipients->isEmpty()) return;
 
@@ -50,13 +49,13 @@ class NcfAlert
 
         // Notifica por usuario, filtrando por su umbral y filtro de tiendas si lo hay
         foreach ($recipients as $user) {
-            $userSettings = $allSettings->get($user->id, AlertSettings::DEFAULTS);
-            $threshold = (int)($userSettings['ncf_threshold'] ?? $default);
-            $channels = (array)($userSettings['channels'] ?? ['database']);
+            $userSettings = $allSettings->get($user->id);
+            $threshold = $this->settings->threshold($user, 'ncf', $userSettings);
+            $channels = $this->settings->channels($user, $userSettings);
             $overrides = $userSettings['overrides'] ?? null;
 
             // Lógica de filtrado de tiendas (extraída de AlertSettings para usar aquí)
-            $filterStores = null;
+            $filterStores = $this->settings->storeFilter($user, 'ncf', $userSettings);
             if (is_array($overrides)) {
                 $stores = $overrides['stores']['ncf'] ?? null;
                 if (is_array($stores) && !empty($stores)) {
@@ -76,7 +75,7 @@ class NcfAlert
 
             if ($seqsForUser->isEmpty()) continue;
 
-            $channels = $this->settings->channels($user, 'ncf');
+            // $channels = $this->settings->channels($user, 'ncf');
 
             $user->notify(
                 (new NcfRunningLowNotification($seqsForUser, $threshold))

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useCallback } from 'react';
 import { Head, usePage } from '@inertiajs/react';
+import { PageProps as InertiaPageProps } from '@inertiajs/core';
 import { toast } from 'sonner';
 import AppLayout from '@/layouts/app-layout';
 
@@ -10,6 +11,7 @@ import { ProductSearch } from './partials/product-search';
 import { ProductGrid } from './partials/product-grid';
 import { CartPanel } from './partials/cart-panel';
 import { PaymentDialog } from './partials/paymentDialog';
+import { ReceiptPreviewDialog } from './partials/ReceiptPreviewDialog';
 
 // Hooks de lógica del POS
 import { usePosContext } from './hooks/usePosContext';
@@ -20,9 +22,22 @@ import { usePosSaleProcessor } from './hooks/usePosSaleProcessor';
 // Tipos
 import { Customer } from '@/types/index';
 import { type UIPayment } from './partials/paymentDialog';
+import { SaleData, ReceiptSettings } from './libs/pos-types';
+
+interface CustomPosPageProps {
+    receipt_settings: ReceiptSettings;
+    flash?: {
+        success?: string;
+        error?: string;
+        sale?: SaleData;
+    };
+}
+
+type PosPageProps = CustomPosPageProps & InertiaPageProps;
 
 export default function PosPage() {
-    const { flash, pos }: any = usePage().props;
+    const { props } = usePage<PosPageProps>();
+    const { receipt_settings, flash } = props;
 
     // --- 1. Inicialización de Hooks ---
     const context = usePosContext();
@@ -36,6 +51,9 @@ export default function PosPage() {
     const [customer, setCustomer] = useState<Customer | null>(null);
     const [ncfInfo, setNcfInfo] = useState<{ type: "B01" | "B02"; preview: string | null }>({ type: "B02", preview: null });
 
+    const [lastSale, setLastSale] = useState<SaleData | null>(null);
+    const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+
     const handleNcfChange = useCallback((type: 'B01' | 'B02', preview: string | null) => {
         setNcfInfo({ type, preview });
     }, []);
@@ -46,21 +64,25 @@ export default function PosPage() {
         cart,
         customer,
         ncfInfo,
-        onSuccess: () => {
+        // 3. --- NUEVO FLUJO `onSuccess` ---
+        onSuccess: (completedSale: SaleData | null) => {
+            // Lógica de limpieza que ya tenías
             cart.clearCart();
             setIsPaymentModalOpen(false);
             setCustomer(null);
             setNcfInfo({ type: "B02", preview: null });
             search.setQuery('');
+
+            // Nueva lógica para abrir el diálogo de recibo
+            if (completedSale) {
+                setLastSale(completedSale);
+                setIsReceiptOpen(true);
+            }
         },
     });
 
     // --- 4. Efectos para notificaciones y limpieza ---
-    useEffect(() => {
-        if (pos?.last_sale) {
-            window.open(`/sales/${pos.last_sale.id}/print`, '_blank');
-        }
-    }, [pos?.last_sale]);
+
 
     useEffect(() => {
         if (flash?.success) toast.success(flash.success);
@@ -68,7 +90,10 @@ export default function PosPage() {
     }, [flash]);
 
 
-
+    const handleCloseReceipt = () => {
+        setIsReceiptOpen(false);
+        setLastSale(null);
+    };
 
     // --- 5. Renderizado del Layout y Componentes ---
     return (
@@ -130,6 +155,13 @@ export default function PosPage() {
                 isProcessing={isProcessing}
                 customer={customer}
                 onCreditSale={processCreditSale}
+            />
+
+            <ReceiptPreviewDialog
+                isOpen={isReceiptOpen}
+                onClose={handleCloseReceipt}
+                sale={lastSale}
+                settings={receipt_settings}
             />
         </AppLayout>
     );

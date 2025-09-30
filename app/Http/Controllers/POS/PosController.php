@@ -5,6 +5,7 @@ namespace App\Http\Controllers\POS;
 use App\Http\Controllers\Controller;
 use App\Models\Inventory;
 use App\Models\Product;
+use App\Models\ReceiptSetting;
 use App\Models\Sale;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -15,8 +16,11 @@ class PosController extends Controller
 {
     public function index()
     {
+        $settings = ReceiptSetting::first();
         // Más adelante pasaremos aquí los productos y otros datos
-        return Inertia::render('pos/index');
+        return Inertia::render('pos/index', [
+            'receipt_settings' => $settings,
+        ]);
     }
 
 

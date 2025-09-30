@@ -19,10 +19,10 @@ class NcfRunningLowNotification extends Notification implements ShouldQueue, Sho
         protected int $threshold
     ) {}
 
-    public function via(object $notifiable): array
-    {
-        return ['database'];
-    }
+    // public function via(object $notifiable): array
+    // {
+    //     return ['database'];
+    // }
 
     public function toArray(object $notifiable): array
     {

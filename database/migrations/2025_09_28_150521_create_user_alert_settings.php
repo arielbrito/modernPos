@@ -13,13 +13,18 @@ return new class extends Migration {
             // Dueño de la configuración
             $table->foreignId('user_id')->constrained()->cascadeOnDelete()->cascadeOnUpdate();
 
+            // Para controlar fácilmente si un tipo de alerta está activo.
+            $table->boolean('low_stock_enabled')->default(true);
+            $table->boolean('ncf_enabled')->default(true);
+
             // Umbrales por defecto
             $table->unsignedInteger('low_stock_threshold')->default(3);
             $table->unsignedInteger('ncf_threshold')->default(50);
 
             // Canales globales del usuario
             // Ej: ["database","mail","broadcast"]
-            $table->jsonb('channels')->default(json_encode(['database']));
+            // Canales globales
+            $table->json('channels')->nullable(); // Permitimos null si no hay ninguno
 
             // Overrides por tienda o tipo de alerta (opcional)
             // Ej: {"store_5":{"low_stock_threshold":2,"channels":["database","mail"]}}

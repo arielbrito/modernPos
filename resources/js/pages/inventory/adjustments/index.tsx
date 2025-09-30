@@ -1,5 +1,6 @@
 import * as React from "react";
 import { Head, Link, router } from "@inertiajs/react";
+import { useDebouncedCallback } from "use-debounce";
 
 // --- LAYOUT, COMPONENTS & ICONS ---
 import AppLayout from "@/layouts/app-layout";
@@ -8,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Pagination } from "@/components/pagination";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Package, Plus, ArrowUp, ArrowDown, TrendingUp, TrendingDown, FilePlus, Users } from "lucide-react";
+import { Package, Plus, ArrowUp, ArrowDown, TrendingUp, TrendingDown, FilePlus, Users, Eye } from "lucide-react";
 import { DateRangePicker } from "@/components/ui/date-range-picker" // Asumiendo que tienes este componente
 
 // --- UTILS, TYPES & ACTIONS ---
@@ -47,13 +48,30 @@ const StatCard = ({ title, value, icon, trend, trendValue }: { title: string; va
 const breadcrumbs: BreadcrumbItem[] = [{ title: "Ajustes de Inventario", href: InventoryAdjustmentController.index.url() }];
 
 export default function IndexInventoryAdjustments({ adjustments, stats, filters }: Props) {
-    const handleDateChange = (dateRange: any) => {
-        if (dateRange?.from && dateRange?.to) {
-            router.get(InventoryAdjustmentController.index.url(), {
-                from: dateRange.from.toISOString().split('T')[0],
-                to: dateRange.to.toISOString().split('T')[0],
-            }, { preserveState: true, replace: true });
-        }
+    const [localFilters, setLocalFilters] = React.useState(() => ({
+        from: filters.from ? new Date(filters.from) : new Date(new Date().setDate(new Date().getDate() - 30)),
+        to: filters.to ? new Date(filters.to) : new Date(),
+
+    }));
+
+    const debouncedSubmit = useDebouncedCallback((newFilters) => {
+        router.get(InventoryAdjustmentController.index.url(), newFilters, {
+            preserveState: true,
+            replace: true,
+            preserveScroll: true,
+        });
+    }, 500);
+
+
+    const handleFilterChange = (newFilterValues: typeof localFilters) => {
+        // Actualizamos la UI inmediatamente
+        setLocalFilters(newFilterValues);
+
+        // Preparamos el payload y llamamos a la función debounced
+        debouncedSubmit({
+            from: newFilterValues.from.toISOString().split('T')[0],
+            to: newFilterValues.to.toISOString().split('T')[0],
+        });
     };
 
     return (
@@ -67,7 +85,15 @@ export default function IndexInventoryAdjustments({ adjustments, stats, filters 
                         <h1 className="text-2xl font-bold">Ajustes de Inventario</h1>
                     </div>
                     <div className="flex items-center gap-2">
-                        <DateRangePicker from={new Date(filters.from)} to={new Date(filters.to)} onUpdate={handleDateChange} />
+                        <DateRangePicker
+                            date={{ from: localFilters.from, to: localFilters.to }}
+                            // --- CORRECCIÓN AQUÍ ---
+                            onDateChange={(range) => {
+                                if (range?.from && range?.to) {
+                                    handleFilterChange({ ...localFilters, from: range.from, to: range.to });
+                                }
+                            }}
+                        />
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button className="gap-2">
@@ -111,6 +137,7 @@ export default function IndexInventoryAdjustments({ adjustments, stats, filters 
                                     <TableHead>Tienda</TableHead>
                                     <TableHead>Usuario</TableHead>
                                     <TableHead className="text-right"># Items</TableHead>
+                                    <TableHead className="text-right">Acciones</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -122,6 +149,15 @@ export default function IndexInventoryAdjustments({ adjustments, stats, filters 
                                         <TableCell>{adj.store.name}</TableCell>
                                         <TableCell>{adj.user?.name || 'N/A'}</TableCell>
                                         <TableCell className="text-right">{adj.items_count}</TableCell>
+                                        <TableCell className="text-right">
+
+                                            <Link href={InventoryAdjustmentController.show({ adjustment: Number(adj.id) })}>
+                                                <Button size={'icon'} variant={'default'}>
+                                                    <Eye className="w-4 h-4" />
+                                                </Button>
+                                            </Link>
+
+                                        </TableCell>
                                     </TableRow>
                                 )) : (
                                     <TableRow><TableCell colSpan={6} className="h-24 text-center">No hay ajustes en el período seleccionado.</TableCell></TableRow>

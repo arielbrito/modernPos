@@ -80,7 +80,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('dashboard');
 
         // Rutas del POS
-        Route::get('/pos', [PosController::class, 'index'])->name('pos.index');
+        Route::get('/pos', [PosController::class, 'index'])->name('pos.index')->middleware('has.active.shift');
         Route::get('/pos/search-products', [PosController::class, 'searchProducts'])->name('pos.searchProducts');
         Route::post('/pos/sales', [PosController::class, 'storeSale'])->name('pos.storeSale');
 

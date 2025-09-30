@@ -140,7 +140,13 @@ class RegisterController extends Controller
     {
         $this->authorize('viewAny', Register::class);
 
+
         $storeId = (int) session('active_store_id');
+
+        $regId = session('active_register_id');
+        if ($regId) {
+            return redirect()->route('cash.registers.cashbook.show', ['register' => $regId]);
+        }
         $registers = Register::query()
             ->when($storeId, fn($q) => $q->where('store_id', $storeId))
             ->where('active', true)

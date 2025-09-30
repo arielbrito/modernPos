@@ -53,6 +53,22 @@ export type SalePaymentPayload = {
     change_currency_code?: string | null;
 };
 
+export interface SaleData {
+    id: number;
+    number: string;
+    currency_code: string;
+    subtotal: number;
+    tax_total: number;
+    discount_total: number;
+    total: number;
+    occurred_at: string;
+    customer?: { id: number; name: string; email?: string };
+    store: { name: string };
+    user: { name: string };
+    lines: any[];
+    payments: any[];
+}
+
 export type SalePayload = {
     store_id: number;
     register_id: number;
@@ -80,3 +96,15 @@ export interface PosContext {
 
 // Cliente del POS
 export type PosCustomer = Customer | null;
+
+export interface ReceiptSettings {
+    company_name: string;
+    tax_id?: string;
+    address?: string;
+    phone?: string;
+    email?: string;
+    website?: string;
+    logo_path?: string;
+    footer_message?: string;
+    terms_and_conditions?: string;
+}

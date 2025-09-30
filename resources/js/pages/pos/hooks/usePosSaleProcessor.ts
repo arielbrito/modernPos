@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import SaleController from '@/actions/App/Http/Controllers/Sales/SaleController';
+import { type Page } from '@inertiajs/core';
 import { router } from '@inertiajs/react';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { isTruthy, onlyDigits } from '../libs/pos-helpers';
-import { PosContext, PosCustomer, SalePayload } from '../libs/pos-types';
+import { PosContext, PosCustomer, SaleData, SalePayload } from '../libs/pos-types';
 import { type UIPayment } from '../partials/paymentDialog';
 import { UsePosCartResult } from './usePosCart';
 
@@ -13,7 +14,7 @@ interface UsePosSaleProcessorProps {
     cart: UsePosCartResult;
     customer: PosCustomer | null;
     ncfInfo: { type: 'B01' | 'B02'; preview: string | null };
-    onSuccess: () => void;
+    onSuccess: (completedSale: SaleData | null) => void;
 }
 
 export function usePosSaleProcessor({ context, cart, customer, ncfInfo, onSuccess }: UsePosSaleProcessorProps) {
@@ -28,25 +29,8 @@ export function usePosSaleProcessor({ context, cart, customer, ncfInfo, onSucces
                 return;
             }
 
-            // Aquí podrías agregar la validación de pago vs. total si lo deseas
-            // aunque el PaymentDialog ya lo pre-valida.
-
             const payload = buildSalePayload({ context, cart, customer, ncfInfo, payments });
             submit(payload);
-
-            // setIsProcessing(true);
-            // router.post(SaleController.store.url(), payload, {
-            //     preserveScroll: true,
-            //     onSuccess: () => {
-            //         onSuccess(); // Llama al callback de éxito para limpiar el estado
-            //     },
-            //     onError: (errors) => {
-            //         console.error('Error al procesar la venta:', errors);
-            //         const errorMessages = Object.values(errors).join('\n');
-            //         toast.error(`Error al procesar la venta: ${errorMessages}`);
-            //     },
-            //     onFinish: () => setIsProcessing(false),
-            // });
         },
         [context, cart, customer, ncfInfo, onSuccess],
     );
@@ -71,7 +55,7 @@ export function usePosSaleProcessor({ context, cart, customer, ncfInfo, onSucces
         ];
 
         const payload = buildSalePayload({ context, cart, customer, ncfInfo, payments: creditPayments });
-        console.log('payload de venta a crédito:', payload);
+
         submit(payload);
     }, [context, cart, customer, ncfInfo, onSuccess]);
 
@@ -79,14 +63,14 @@ export function usePosSaleProcessor({ context, cart, customer, ncfInfo, onSucces
         setIsProcessing(true);
         router.post(SaleController.store.url(), payload, {
             preserveScroll: true,
-            onSuccess: () => {
-                onSuccess(); // Limpia el TPV
+            onSuccess: (page: Page) => {
+                const completedSale = (page.props as any).flash?.sale as SaleData | undefined;
+                onSuccess(completedSale ?? null);
             },
             onError: (errors) => {
                 console.error('Error al procesar la venta:', errors);
                 const errorMessages = Object.values(errors).join('\n');
                 toast.error(`Error al procesar la venta: ${errorMessages}`);
-                console.log('errorMessages:', errorMessages);
             },
             onFinish: () => setIsProcessing(false),
         });

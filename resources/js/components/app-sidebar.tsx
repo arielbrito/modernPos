@@ -34,7 +34,9 @@ import {
     DollarSign,
     PackageOpen,
     Archive,
-    ArrowLeftRight
+    ArrowLeftRight,
+    BellDot,
+    Receipt
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -55,7 +57,9 @@ import admin from '@/routes/admin';
 import adjustments from '@/routes/inventory/adjustments';
 import returns from '@/routes/sales/returns';
 import purchaseReturns from '@/routes/purchaseReturns';
-import roles from '@/routes/roles';
+import roles from '@/routes/settings/roles';
+import alerts from '@/routes/settings/alerts';
+import receipts from '@/routes/settings/receipts';
 
 /**
  * Configuración de navegación principal
@@ -103,7 +107,7 @@ const mainNavItems: NavItem[] = [
         children: [
             { title: 'Productos', href: products.index.url(), icon: ScanBarcode, permission: 'products.view' },
             { title: 'Compras', href: purchases.index.url(), icon: ShoppingBag, permission: 'purchases.view' },
-            { title: 'Devoluciones (Compra)', href: purchaseReturns.index.url(), icon: ArrowLeftRight, permission: 'purchaseReturns.view' },
+            { title: 'Devoluciones (Compra)', href: purchaseReturns.index.url(), icon: ArrowLeftRight, permission: 'purchase_returns.view' },
             { title: 'Ajustes', href: adjustments.index.url(), icon: Package, permission: 'inventory_adjustments.view' },
         ],
     },
@@ -136,6 +140,9 @@ const mainNavItems: NavItem[] = [
             { title: 'Gestión de Cajas', href: registers.index.url(), icon: CircleDollarSign, permission: 'registers.view' },
             { title: 'Usuarios del Sistema', href: users.index.url(), icon: Users2, permission: 'users.view' },
             { title: 'Roles', href: roles.index.url(), icon: Users2 },
+            { title: 'Alertas', href: alerts.edit.url(), icon: BellDot },
+            { title: 'Ticket', href: receipts.edit.url(), icon: Receipt },
+
         ],
     },
     {

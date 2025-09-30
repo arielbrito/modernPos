@@ -9,6 +9,8 @@ use App\Models\Sale;
 use Inertia\Inertia;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
+use App\Mail\SaleReceiptMail; // Crearemos esta clase ahora
+use Illuminate\Support\Facades\Mail;
 
 class SalePrintController extends Controller
 {
@@ -38,5 +40,20 @@ class SalePrintController extends Controller
         return $request->boolean('download')
             ? $pdf->download("venta-{$sale->number}.pdf")
             : $pdf->stream("venta-{$sale->number}.pdf");
+    }
+
+
+    public function sendByEmail(Request $request, Sale $sale)
+    {
+        $sale->load('customer');
+
+        if (!$sale->customer || !$sale->customer->email) {
+            return back()->with('error', 'El cliente no tiene un correo electrónico registrado.');
+        }
+
+        // Usamos una clase Mailable para un email limpio y profesional
+        Mail::to($sale->customer->email)->send(new SaleReceiptMail($sale));
+
+        return back()->with('success', 'Recibo enviado por correo electrónico.');
     }
 }

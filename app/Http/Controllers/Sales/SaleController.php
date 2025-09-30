@@ -182,14 +182,18 @@ class SaleController extends Controller
 
             $sale = $svc->create($data, $req->user()->id);
 
-            return to_route('pos.index')
-                ->with('success', "Venta #{$sale->number} registrada.")
-                ->with('pos.last_sale', [
-                    'id'       => $sale->id,
-                    'number'   => $sale->number,
-                    'total'    => (float)$sale->total,
-                    'currency' => $sale->currency_code,
-                ]);
+            $sale->load([
+                'lines',
+                'payments',
+                'customer:id,name,email',
+                'user:id,name',
+                'store:id,name'
+            ]);
+
+            return to_route('pos.index')->with([
+                'success' => "Venta #{$sale->number} registrada.",
+                'sale'    => $sale,
+            ]);
         } catch (\Throwable $th) {
 
             return redirect()->back()->with('error', 'Error al procesar la venta: ' . $th->getMessage());

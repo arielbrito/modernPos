@@ -109,7 +109,8 @@ Route::controller(InventoryAdjustmentController::class)
         Route::get('/', 'index')->name('index'); // Para el listado de ajustes (futuro)
         Route::get('/create', 'create')->name('create');
         Route::post('/', 'store')->name('store');
-        //Route::get('/{adjustment}', 'show')->name('show'); // Para ver un ajuste específico (futuro)
+        Route::get('/{adjustment}', 'show')->name('show'); // Para ver un ajuste específico (futuro)
+        Route::get('/{adjustment}/print', 'print')->name('print');
 
         Route::get('/bulk-adjust',  'bulkCreate')
             ->name('bulkCreate')

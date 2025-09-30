@@ -21,11 +21,11 @@ class LowStockNotification extends Notification implements ShouldQueue, ShouldBr
         protected ?Store $store = null
     ) {}
 
-    public function via(object $notifiable): array
-    {
-        // Agrega 'mail' si tienes mailer configurado
-        return ['database'];
-    }
+    // public function via(object $notifiable): array
+    // {
+    //     // Agrega 'mail' si tienes mailer configurado
+    //     return ['database'];
+    // }
 
     public function toArray(object $notifiable): array
     {
