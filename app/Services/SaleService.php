@@ -2,18 +2,15 @@
 // app/Services/SaleService.php
 namespace App\Services;
 
+use App\Events\SaleCompleted; // Importamos el Evento
 use App\Models\{
     Sale,
     SaleLine,
     SalePayment,
     ProductVariant,
     Inventory,
-    ProductStockMovement,
     Customer,
     CashShift,
-    Register,
-    SaleTax,
-    SystemAlert,
     Tax
 };
 use Illuminate\Support\Facades\Auth;
@@ -30,15 +27,6 @@ class SaleService
 
     /**
      * Crea la venta COMPLETA (líneas, pago, inventario, NCF y movimientos de caja).
-     *
-     * $input esperado (añadidos bill_to_*):
-     * - store_id, register_id, shift_id
-     * - customer_id (int|null)
-     * - bill_to_name (string)              // requerido siempre (puedes validarlo en FormRequest)
-     * - bill_to_doc_type ('RNC'|'CED'|'NONE')
-     * - bill_to_doc_number (string|null)
-     * - bill_to_is_taxpayer (bool|null)
-     * - lines[], payments[], ncf_type?, occurred_at?, meta?
      */
     public function create(array $input, ?int $userId = null): Sale
     {
@@ -101,10 +89,33 @@ class SaleService
             $lines,
             $payments,
             $userId,
-            $input,
             $isCreditSale
         ) {
-            // ========= STEP 1: Create Sale Header =========
+            // =======================================================
+            // === 1. CARGA MASIVA y BLOQUEO (OPTIMIZACIÓN CLAVE) ====
+            // =======================================================
+
+            $variantIds = array_column($lines, 'variant_id');
+
+            // Cargar TODAS las ProductVariants necesarias con sus productos (1 consulta)
+            $variants = ProductVariant::with('product')
+                ->whereIn('id', $variantIds)
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            // Cargar TODO el Inventory necesario y BLOQUEARLO (1 consulta)
+            $inventory = Inventory::query()
+                ->where('store_id', $storeId)
+                ->whereIn('product_variant_id', $variantIds)
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('product_variant_id');
+
+            // =======================================================
+            // === STEP 2: Create Sale Header y Procesar Líneas =======
+            // =======================================================
+
             $sale = new Sale();
             $sale->fill([
                 'store_id'              => $storeId,
@@ -122,15 +133,26 @@ class SaleService
                 'occurred_at'           => $occurredAt,
                 'meta'                  => $meta,
             ]);
-            $sale->save();
+            $sale->save(); // Se crea el ID de venta
 
-            // ========= STEP 2: Process Lines & Calculate Totals =========
             $subtotal = 0;
             $discountTotal = 0;
             $taxTotal = 0;
             $grandTotal = 0;
+
+            // Datos a pasar al Listener en cola para Stock/Alertas
+            $saleLineData = [];
+
             foreach ($lines as $i => $row) {
                 $variantId  = (int)$row['variant_id'];
+
+                /** @var ProductVariant $variant */
+                $variant = $variants->get($variantId);
+
+                if (!$variant) {
+                    throw new InvalidArgumentException("Variante #{$variantId} no encontrada.");
+                }
+
                 $qty        = (float)$row['qty'];
                 $unitPrice  = round((float)$row['unit_price'], 2);
 
@@ -138,12 +160,7 @@ class SaleService
                     throw new InvalidArgumentException("Cantidad inválida en línea #" . ($i + 1));
                 }
 
-                /** @var ProductVariant $variant */
-                $variant = ProductVariant::with('product') // Carga el producto completo
-                    ->lockForUpdate()
-                    ->findOrFail($variantId);
-
-                // Descuentos
+                // --- Lógica de cálculo (rápida, sin BD) ---
                 $discPct = isset($row['discount_percent']) ? (float)$row['discount_percent'] : 0.0;
                 $discAmt = isset($row['discount_amount'])  ? round((float)$row['discount_amount'], 2) : 0.0;
 
@@ -154,7 +171,6 @@ class SaleService
                     $discPct = round(($discAmt / $lineBase) * 100, 2);
                 }
 
-                // Impuestos
                 $taxCode = $row['tax_code'] ?? null;
                 $taxName = $row['tax_name'] ?? null;
                 $taxRate = isset($row['tax_rate']) ? (float)$row['tax_rate'] : 0.0;
@@ -168,7 +184,7 @@ class SaleService
                 $taxTotal      += $lineTaxAmt;
                 $grandTotal    += $lineTotal;
 
-                // Snapshot seguro de la línea
+                // --- Creación de SaleLine ---
                 $snapshotName = $variant->product?->name ?: ($row['name'] ?? $variant->sku ?? "Var #{$variant->id}");
                 $snapshotSku  = $variant->sku ?? null;
                 $snapshotAttr = $variant->attributes ?? null;
@@ -195,13 +211,10 @@ class SaleService
                     'line_total'       => $lineTotal,
                 ]);
 
-                // Inventario + COGS
-                if ($variant->product->isStockable()) { // <-- Usando el helper del modelo Product
-                    $inv = Inventory::query()
-                        ->where('store_id', $storeId)
-                        ->where('product_variant_id', $variant->id)
-                        ->lockForUpdate()
-                        ->first();
+                // --- Única Interacción de Inventario Síncrona (Decremento) ---
+                if ($variant->product->isStockable()) {
+                    /** @var Inventory $inv */
+                    $inv = $inventory->get($variant->id);
 
                     if (!$inv || (float) $inv->quantity < $qty) {
                         $name = $variant->product->name ?? $variant->sku ?? "Var #{$variant->id}";
@@ -211,62 +224,37 @@ class SaleService
                         ]);
                     }
 
+                    // CRÍTICO: El único decremento para mantener el stock actualizado
                     $inv->decrement('quantity', $qty);
 
-                    // La creación de ProductStockMovement también debe ser condicional
-                    $cogsUnit = (float)$variant->average_cost;
-                    ProductStockMovement::create([
-                        'product_variant_id' => $variant->id,
-                        'store_id' => $storeId,
-                        'type' => 'sale_exit',
-                        'quantity' => $qty,
-                        'unit_price' => round($cogsUnit, 4),
-                        'subtotal' => round($cogsUnit * $qty, 2),
-                        'user_id' => $userId,
-                        'source_type' => Sale::class,
-                        'source_id' => $sale->id,
-                        'notes' => "Salida por venta #{$sale->number}",
-                    ]);
-
-                    // La lógica de alerta de stock bajo también va aquí adentro
-                    if ($inv->refresh()->quantity <= (float)$inv->reorder_point) {
-                        SystemAlert::updateOrCreate(
-                            [
-                                'type' => 'low_stock',
-                                'severity' => 'warning',
-                                'title' => "Stock bajo: {$variant->product?->name} ({$variant->sku})",
-                                'is_read' => false,
-                            ],
-                            [
-                                'message' => "Tienda #{$storeId} — Cantidad: {$inv->quantity}, Umbral: {$inv->reorder_point}",
-                                'meta' => [
-                                    'store_id' => $storeId,
-                                    'product_variant_id' => $variant->id,
-                                    'quantity' => (float)$inv->quantity,
-                                    'reorder_point' => (float)$inv->reorder_point,
-                                ],
-                            ]
-                        );
-                    }
-                } // --- Fin del bloque condicional de 
+                    // Almacenar datos para la cola (Movement y Alert)
+                    $saleLineData[] = [
+                        'variant_id' => $variant->id,
+                        'qty' => $qty,
+                        'cogs_unit' => (float)$variant->average_cost,
+                        'reorder_point' => (float)$inv->reorder_point,
+                        'remaining_qty' => (float)$inv->quantity - $qty, // Stock después del decremento
+                        'product_name' => $variant->product->name ?? null,
+                        'sku' => $variant->sku ?? null,
+                    ];
+                }
             }
 
 
-            // ========= 3) NCF =========
+            // =======================================================
+            // === STEP 3: NCF (Se mantiene igual) ====================
+            // =======================================================
             $requested = $input['ncf_type'] ?? null;
 
-            // Base por doc del receptor si no hay cliente fijo
             $baseType = $customer
                 ? $this->ncf->defaultTypeForCustomer($customer)
                 : ($billToDocType === 'RNC' ? 'B01' : 'B02');
 
-            // Regla de genérico: siempre B02
             $isGeneric = ($billToDocType === 'NONE');
             if ($isGeneric) {
                 $ncfType = 'B02';
             } else {
                 if ($requested === 'B01') {
-                    // Para B01 el receptor DEBE ser RNC
                     if ($billToDocType !== 'RNC') {
                         throw new InvalidArgumentException('Para B01 el receptor debe tener RNC.');
                     }
@@ -274,7 +262,7 @@ class SaleService
                 } elseif ($requested === 'B02') {
                     $ncfType = 'B02';
                 } else {
-                    $ncfType = $baseType; // por defecto
+                    $ncfType = $baseType;
                 }
             }
 
@@ -284,23 +272,25 @@ class SaleService
                 $sale->ncf_number     = $ncfNumber;
                 $sale->ncf_emitted_at = now();
             } catch (\Throwable $e) {
-                // Si el receptor es RNC (pide NCF), no continuar sin NCF
                 if ($billToDocType === 'RNC') {
                     throw new InvalidArgumentException('No fue posible asignar NCF (secuencia no disponible).');
                 }
-                // Consumidor final o CED: permitir continuar sin NCF si así lo deseas
                 $sale->ncf_type   = null;
                 $sale->ncf_number = null;
             }
 
-            // ========= STEP 4: Save Totals to Sale (CRITICAL STEP) =========
+            // =======================================================
+            // === STEP 4: Save Totals to Sale (CRITICAL STEP) =======
+            // =======================================================
             $sale->subtotal       = round($subtotal, 2);
             $sale->discount_total = round($discountTotal, 2);
             $sale->tax_total      = round($taxTotal, 2);
             $sale->total          = round($grandTotal, 2);
-            $sale->save();
+            $sale->save(); // Segunda salvada con los totales
 
-            // ========= STEP 5: Process Payments (Now with the correct total) =========
+            // =======================================================
+            // === STEP 5: Process Payments (RESTAURADO) =============
+            // =======================================================
             if ($isCreditSale) {
                 // --- CREDIT SALE FLOW ---
                 if ($customer->credit_limit > 0 && ($customer->balance + $sale->total) > $customer->credit_limit) {
@@ -317,7 +307,7 @@ class SaleService
                 $sale->due_total  = $sale->total;
                 $customer->increment('balance', $sale->total);
             } else {
-                // --- FLUJO DE VENTA NORMAL (Tu código original intacto) ---
+                // --- FLUJO DE VENTA NORMAL ---
                 $paidInSaleCcy = 0.0;
                 foreach ($payments as $p) {
                     $method   = (string)$p['method'];
@@ -325,12 +315,10 @@ class SaleService
                     $payCcy   = strtoupper((string)($p['currency_code'] ?? $sale->currency_code));
                     $ref      = $p['reference'] ?? null;
 
-                    // Acepta la clave usada por el front: fx_rate_to_sale (y como fallback fx_rate)
                     $fxRate = isset($p['fx_rate_to_sale'])
                         ? (float)$p['fx_rate_to_sale']
                         : (isset($p['fx_rate']) ? (float)$p['fx_rate'] : null);
 
-                    // Efectivo: montos recibidos y devuelta (pueden venir nulos si no aplica)
                     $tendered = isset($p['tendered_amount']) && $p['tendered_amount'] !== ''
                         ? (float)$p['tendered_amount'] : null;
 
@@ -347,18 +335,17 @@ class SaleService
                         'method'               => $method,
                         'amount'               => round($amount, 2),
                         'currency_code'        => $payCcy,
-                        'fx_rate_to_sale'      => $fxRate,                 // ✅ a columna
-                        'tendered_amount'      => $tendered,               // ✅ a columna
-                        'change_amount'        => $changeAmt,              // ✅ a columna
-                        'change_currency_code' => $changeCcy,              // ✅ a columna
+                        'fx_rate_to_sale'      => $fxRate,
+                        'tendered_amount'      => $tendered,
+                        'change_amount'        => $changeAmt,
+                        'change_currency_code' => $changeCcy,
                         'reference'            => $ref,
                         'bank_name' => $p['bank_name'] ?? null,
                         'card_brand' => $p['card_brand'] ?? null,
                         'card_last4' => $p['card_last4'] ?? null,
-                        'meta'                 => [], // deja meta vacío o úsalo para otra cosa
+                        'meta'                 => [],
                     ]);
 
-                    // Para validar cobertura del total en moneda de la venta
                     $equiv = $payCcy === $sale->currency_code
                         ? $amount
                         : ($fxRate ? $amount * $fxRate : 0.0);
@@ -379,20 +366,17 @@ class SaleService
                             source: $sale,
                         );
 
-
                         if ($tendered && $tendered > $amount) {
                             $changeInPayCcy = round($tendered - $amount, 2);
                             $finalChangeAmount = $changeInPayCcy;
 
-                            // Si la moneda de devolución es diferente a la del pago, convertir
                             if ($changeCcy !== $payCcy && $fxRate) {
                                 $finalChangeAmount = round($changeInPayCcy * $fxRate, 2);
                             }
 
-                            // Actualiza el registro del pago con los valores recalculados y seguros
                             $sp->update([
                                 'change_amount' => $finalChangeAmount,
-                                'change_currency_code' => $changeCcy // El código de moneda sí se confía
+                                'change_currency_code' => $changeCcy
                             ]);
                         }
                     }
@@ -406,6 +390,14 @@ class SaleService
             }
 
             $sale->save();
+
+            // =======================================================
+            // === STEP 6: DISPARAR EVENTO (FUERA DE LÍNEA) ===========
+            // =======================================================
+            // Esto asegura que la lógica de ProductStockMovement y SystemAlert 
+            // no bloquee la respuesta HTTP.
+            event(new SaleCompleted($sale, $saleLineData, $userId));
+
             return $sale->fresh(['lines', 'payments', 'customer']);
         });
     }
@@ -415,6 +407,7 @@ class SaleService
     {
         $yy = now()->format('Y');
 
+        // Esta consulta es O(N) pero se mantiene por ahora, la prioridad es el bucle.
         $last = Sale::query()
             ->where('store_id', $storeId)
             ->where('number', 'like', "POS-{$yy}-%")
