@@ -1,29 +1,38 @@
 <?php
 
+use Illuminate\Support\Facades\Route;
+
 use App\Http\Controllers\Sales\SaleController;
 use App\Http\Controllers\Sales\SaleExportController;
 use App\Http\Controllers\Sales\SalePrintController;
 use App\Http\Controllers\Sales\SaleReturnController;
-use Illuminate\Support\Facades\Route;
 
+// 💡 Sugerido: agrupa bajo /sales con alias sales.*
+Route::prefix('sales')
+    ->as('sales.')
+    ->group(function () {
 
+        // --- Acciones generales ---
+        Route::get('/', [SaleController::class, 'index'])->name('index');           // opcional (lista)
+        Route::post('/', [SaleController::class, 'store'])->name('store');          // crear venta
+        Route::post('/preview', [SaleController::class, 'preview'])->name('preview');
 
-//ventas
-Route::post('/sales/preview', [SaleController::class, 'preview'])->name('sales.preview');
-Route::post('/sales', [SaleController::class, 'store'])->name('sales.store');
-Route::get('/sales',  [SaleController::class, 'index'])->name('sales.index'); // opcional
-Route::get('/sales/{sale}', [SaleController::class, 'show'])->name('sales.show'); // opcional
-Route::post('/sales/returns', [SaleReturnController::class, 'store'])
-    ->name('sales.returns.store');
+        // --- Devoluciones ---
+        Route::post('/returns', [SaleReturnController::class, 'store'])->name('returns.store');
 
-Route::get('/sales/{sale}/pdf', [SalePrintController::class, 'pdf'])
-    ->name('sales.pdf');
+        // --- Exportaciones (definir ANTES de {sale}) ---
+        Route::get('/export/csv',  [SaleExportController::class, 'csv'])->name('export.csv');
+        Route::get('/export/xlsx', [SaleExportController::class, 'xlsx'])->name('export.xlsx');
 
-Route::get('/sales/{sale}/print', [SalePrintController::class, 'print'])
-    ->name('sales.print');
+        // --- Impresión / PDF (por venta) ---
+        Route::get('/{sale}/print', [SalePrintController::class, 'print'])->name('print');
+        Route::get('/{sale}/pdf',   [SalePrintController::class, 'pdf'])->name('pdf');
 
-route::get('/sales/{sale}', [SaleController::class, 'receipt'])
-    ->name('sales.receipt');
+        // --- Recibo visual separado del show para evitar colisión ---
+        Route::get('/{sale}/receipt', [SaleController::class, 'receipt'])->name('receipt');
 
-Route::get('/sales/export/csv',  [SaleExportController::class, 'csv'])->name('sales.export.csv');
-Route::get('/sales/export/xlsx', [SaleExportController::class, 'xlsx'])->name('sales.export.xlsx');
+        // --- Show (JSON o vista detallada) ---
+        Route::get('/{sale}', [SaleController::class, 'show'])
+            ->whereNumber('sale')
+            ->name('show'); // opcional
+    });

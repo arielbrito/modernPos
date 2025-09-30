@@ -130,6 +130,7 @@ const mainNavItems: NavItem[] = [
     {
         title: 'Configuración',
         isSection: true,
+        permission: 'settings.view'
     },
     {
         title: 'Sistema',
@@ -139,15 +140,16 @@ const mainNavItems: NavItem[] = [
             { title: 'Tiendas', href: stores.index.url(), icon: Store, permission: 'stores.view' },
             { title: 'Gestión de Cajas', href: registers.index.url(), icon: CircleDollarSign, permission: 'registers.view' },
             { title: 'Usuarios del Sistema', href: users.index.url(), icon: Users2, permission: 'users.view' },
-            { title: 'Roles', href: roles.index.url(), icon: Users2 },
-            { title: 'Alertas', href: alerts.edit.url(), icon: BellDot },
-            { title: 'Ticket', href: receipts.edit.url(), icon: Receipt },
+            { title: 'Roles', href: roles.index.url(), icon: Users2, permission: 'roles.view' },
+            { title: 'Alertas', href: alerts.edit.url(), icon: BellDot, permission: 'settings.view' },
+            { title: 'Ticket', href: receipts.edit.url(), icon: Receipt, permission: 'settings.view' },
 
         ],
     },
     {
         title: 'Fiscal',
         icon: Landmark,
+        permission: 'settings.view',
         children: [
             { title: 'Secuencias NCF', href: ncf.index.url(), icon: FileText, permission: 'ncf.view' },
             { title: 'Sincronización DGII', href: admin.dgiiSync.create.url(), permission: 'dgii.sync.view' },
