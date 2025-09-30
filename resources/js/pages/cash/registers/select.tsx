@@ -166,7 +166,7 @@ export default function SelectRegister({ context, registers }: Props) {
 
                                         <Button
                                             className="mt-4 w-full gap-2"
-                                            disabled={isStoreMissing || blocked || isCurrent || busy}
+                                            disabled={isStoreMissing || blocked || isCurrent}
                                             onClick={() => choose(r.id)}
                                         >
                                             <Power className="h-4 w-4" />
