@@ -36,8 +36,36 @@ import { StoreForm } from "./partials/store-form";
 import { DeleteStoreDialog } from "./partials/delete-store-dialog";
 import { cn } from "@/lib/utils";
 
+type AssignedUser = { id: number; name: string; email: string | null; roles: string[] };
+type ActivityKpis = { today_count: number; today_total: number; week_total: number; avg_ticket: number };
+type RecentSale = { id: number; number: string; total: number; currency: string; occurred_at: string; user?: string | null };
+type HistoryItem = { id: number; event: string | null; causer?: string | null; when?: string | null; changes?: any };
+
+type StoreVM = {
+    id: number;
+    code: string | null;
+    rnc: string;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    currency: string;
+    is_active: boolean;
+    logo_url: string | undefined;
+    created_at: string;
+    updated_at: string;
+    stats?: {
+        users: number;
+        registers: number;
+        active_registers: number;
+    };
+};
+
 interface Props {
-    store: Store;
+    store: StoreVM;
+    assignedUsers: AssignedUser[];
+    activity: { kpis: ActivityKpis; recent: RecentSale[] };
+    history: HistoryItem[];
 }
 
 // Componente para mostrar campos de información
@@ -129,7 +157,7 @@ const StatCard = ({
     );
 };
 
-export default function StoreShowPage({ store }: Props) {
+export default function StoreShowPage({ store, assignedUsers, activity, history }: Props) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: "Tiendas", href: stores.index.url() },
         { title: store.name, href: "#" },
@@ -262,12 +290,12 @@ export default function StoreShowPage({ store }: Props) {
                     />
                     <StatCard
                         title="Usuarios"
-                        value="0" // Esto vendría de props o API
+                        value={store.stats?.users ?? 0}
                         icon={<Users className="h-4 w-4" />}
                     />
                     <StatCard
                         title="POS Activos"
-                        value="0" // Esto vendría de props o API
+                        value={store.stats?.active_registers ?? 0}
                         icon={<CreditCard className="h-4 w-4" />}
                     />
                 </div>
@@ -308,7 +336,7 @@ export default function StoreShowPage({ store }: Props) {
                                     <div className="flex items-center gap-4 mb-6">
                                         <Avatar className="h-20 w-20">
                                             <AvatarImage
-                                                src={store.logo_url}
+                                                src={store?.logo_url}
                                                 alt={`Logo de ${store.name}`}
                                             />
                                             <AvatarFallback className="text-xl font-bold">
@@ -411,31 +439,115 @@ export default function StoreShowPage({ store }: Props) {
                     <TabsContent value="users">
                         <Card>
                             <CardHeader>
-                                <CardTitle>Usuarios Asignados</CardTitle>
+                                <CardTitle className="flex items-center justify-between">
+                                    <span>Usuarios Asignados</span>
+                                    <Badge variant="outline">{assignedUsers.length}</Badge>
+                                </CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="text-center py-8 text-muted-foreground">
-                                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                                    <p>Funcionalidad de usuarios en desarrollo</p>
-                                </div>
+                                {assignedUsers.length === 0 ? (
+                                    <div className="text-center py-10 text-muted-foreground">
+                                        <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                                        <p>No hay usuarios asignados a esta tienda.</p>
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead className="text-left text-muted-foreground">
+                                                <tr className="border-b">
+                                                    <th className="py-2">Usuario</th>
+                                                    <th className="py-2">Email</th>
+                                                    <th className="py-2">Roles</th>
+                                                    <th className="py-2 text-right">Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {assignedUsers.map(u => (
+                                                    <tr key={u.id} className="border-b last:border-0">
+                                                        <td className="py-3">
+                                                            <div className="flex items-center gap-3">
+                                                                <Avatar className="h-8 w-8">
+                                                                    <AvatarFallback>{(u.name ?? 'U').slice(0, 2).toUpperCase()}</AvatarFallback>
+                                                                </Avatar>
+                                                                <span className="font-medium">{u.name}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3">{u.email ?? <span className="text-muted-foreground">—</span>}</td>
+                                                        <td className="py-3">
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {(u.roles?.length ? u.roles : ['usuario']).map(r => (
+                                                                    <Badge key={r} variant="secondary">{r}</Badge>
+                                                                ))}
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3 text-right">
+                                                            <Button size="sm" variant="ghost" asChild>
+                                                                <Link href={`/admin/users/${u.id}`}>Ver</Link>
+                                                            </Button>
+                                                            {/* Aquí podrías agregar Quitar/Asignar con un dialog */}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     </TabsContent>
 
+
                     {/* Tab de actividad */}
                     <TabsContent value="activity">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                            <StatCard title="Ventas Hoy" value={activity.kpis.today_count} icon={<BarChart3 className="h-4 w-4" />} />
+                            <StatCard title="Total Hoy" value={`${activity.kpis.today_total.toFixed(2)} ${store.currency ?? ''}`} icon={<CreditCard className="h-4 w-4" />} />
+                            <StatCard title="Total Semana" value={`${activity?.kpis.week_total} ${store.currency ?? ''}`} icon={<CreditCard className="h-4 w-4" />} />
+                            <StatCard title="Ticket Prom." value={`${activity?.kpis.avg_ticket.toFixed(2)} ${store.currency ?? ''}`} icon={<BarChart3 className="h-4 w-4" />} />
+                        </div>
+
                         <Card>
                             <CardHeader>
-                                <CardTitle>Actividad Reciente</CardTitle>
+                                <CardTitle>Últimas Ventas</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="text-center py-8 text-muted-foreground">
-                                    <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                                    <p>Dashboard de actividad en desarrollo</p>
-                                </div>
+                                {activity.recent.length === 0 ? (
+                                    <div className="text-center py-10 text-muted-foreground">
+                                        <BarChart3 className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                                        <p>No hay ventas recientes.</p>
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead className="text-left text-muted-foreground">
+                                                <tr className="border-b">
+                                                    <th className="py-2">#</th>
+                                                    <th className="py-2">Fecha</th>
+                                                    <th className="py-2">Cajero</th>
+                                                    <th className="py-2 text-right">Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {activity.recent.map(s => (
+                                                    <tr key={s.id} className="border-b last:border-0">
+                                                        <td className="py-3">
+                                                            <Link className="font-medium hover:underline" href={`/sales/${s.id}/receipt`}>{s.number}</Link>
+                                                        </td>
+                                                        <td className="py-3">{new Date(s.occurred_at).toLocaleString('es-DO')}</td>
+                                                        <td className="py-3">{s.user ?? '—'}</td>
+                                                        <td className="py-3 text-right font-semibold">
+                                                            {s.total.toFixed(2)} {s.currency}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     </TabsContent>
+
 
                     {/* Tab de historial */}
                     <TabsContent value="history">
@@ -444,13 +556,41 @@ export default function StoreShowPage({ store }: Props) {
                                 <CardTitle>Historial de Cambios</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="text-center py-8 text-muted-foreground">
-                                    <History className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                                    <p>Historial de cambios en desarrollo</p>
-                                </div>
+                                {history.length === 0 ? (
+                                    <div className="text-center py-10 text-muted-foreground">
+                                        <History className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                                        <p>No hay eventos registrados.</p>
+                                    </div>
+                                ) : (
+                                    <ul className="space-y-4">
+                                        {history.map(h => (
+                                            <li key={h.id} className="flex items-start gap-3">
+                                                <div className="mt-1 h-2 w-2 rounded-full bg-primary"></div>
+                                                <div className="flex-1">
+                                                    <div className="text-sm">
+                                                        <span className="font-medium">{h.event ?? 'actualización'}</span>
+                                                        {h.causer && <span className="text-muted-foreground"> por {h.causer}</span>}
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {h.when ? new Date(h.when).toLocaleString('es-DO') : ''}
+                                                    </div>
+                                                    {h.changes?.attributes && (
+                                                        <details className="mt-1 text-xs">
+                                                            <summary className="cursor-pointer text-muted-foreground">Ver cambios</summary>
+                                                            <pre className="mt-1 p-2 rounded bg-muted/50 overflow-x-auto">
+                                                                {JSON.stringify(h.changes, null, 2)}
+                                                            </pre>
+                                                        </details>
+                                                    )}
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
                             </CardContent>
                         </Card>
                     </TabsContent>
+
                 </Tabs>
             </div>
 

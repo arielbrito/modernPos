@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use App\Models\ActivityLog;
 
 class StoreController extends Controller
 {
@@ -99,10 +100,106 @@ class StoreController extends Controller
     public function show(Store $store)
     {
         $this->authorize('view', $store);
+
+        // relaciones básicas
+        $store->loadCount([
+            'users',
+            'registers',
+            'registers as active_registers_count' => fn($q) => $q->where('is_active', true),
+        ])->append('logo_url');
+
+        // KPIs de actividad
+        $today   = now()->toDateString();
+        $weekBeg = now()->startOfWeek()->toDateString();
+
+        $todaySales = $store->sales()
+            ->whereDate('occurred_at', $today);
+
+        $weekSales = $store->sales()
+            ->whereDate('occurred_at', '>=', $weekBeg);
+
+        $kpis = [
+            'today_count'   => (clone $todaySales)->count(),
+            'today_total'   => (clone $todaySales)->sum('total'),
+            'week_total'    => (clone $weekSales)->sum('total'),
+            'avg_ticket'    => round((clone $weekSales)->avg('total') ?? 0, 2),
+        ];
+
+        // Últimas ventas (tabla de actividad)
+        $recentSales = $store->sales()
+            ->with(['user:id,name'])
+            ->latest('occurred_at')
+            ->limit(10)
+            ->get(['id', 'number', 'total', 'currency_code', 'occurred_at', 'user_id'])
+            ->map(fn($s) => [
+                'id'           => $s->id,
+                'number'       => $s->number,
+                'total'        => (float) $s->total,
+                'currency'     => $s->currency_code,
+                'occurred_at'  => $s->occurred_at?->toIso8601String(),
+                'user'         => $s->user?->name,
+            ]);
+
+        // Usuarios asignados a la tienda (ajusta la relación según tu modelo)
+        // Ej: Store hasMany users() o belongsToMany users()->withPivot('role')
+        $assignedUsers = $store->users()
+            ->with(['roles:id,name']) // si usas Spatie Permission
+            ->get(['users.id', 'users.name', 'users.email'])
+            ->map(fn($u) => [
+                'id'    => $u->id,
+                'name'  => $u->name,
+                'email' => $u->email,
+                'roles' => $u->roles?->pluck('name')->values() ?? [],
+            ]);
+
+        // Historial (si usas spatie/laravel-activitylog)
+        $history = ActivityLog::query()
+            ->where('subject_type', Store::class)
+            ->where('subject_id', $store->id)
+            ->latest()
+            ->limit(15)
+            ->with('causer:id,name')
+            ->get()
+            ->map(fn($a) => [
+                'id'     => $a->id,
+                'event'  => $a->event,
+                'causer' => $a->causer?->name,
+                'when'   => $a->created_at?->toIso8601String(),
+                'changes' => $a->changes,
+                'desc'   => $a->description,
+            ]);
+
+        $vm = [
+            'id'        => $store->id,
+            'code'      => $store->code,
+            'rnc'       => $store->rnc,
+            'name'      => $store->name,
+            'phone'     => $store->phone,
+            'address'   => $store->address,
+            'email'     => $store->email,
+            'currency'  => $store->currency,
+            'is_active' => (bool) $store->is_active,
+            'logo_url'  => $store->logo_url,
+            'created_at' => optional($store->created_at)->toIso8601String(),
+            'updated_at' => optional($store->updated_at)->toIso8601String(),
+            'stats'     => [
+                'users'            => $store->users_count,
+                'registers'        => $store->registers_count,
+                'active_registers' => $store->active_registers_count,
+            ],
+        ];
+
         return Inertia::render('settings/stores/show', [
-            'store' => $store->only(['id', 'code', 'rnc', 'name', 'phone', 'address', 'email', 'currency', 'logo_url', 'is_active']),
+            'store'        => $vm,
+            'activity'     => [
+                'kpis'   => $kpis,
+                'recent' => $recentSales,
+            ],
+            'assignedUsers' => $assignedUsers,
+            'history'      => $history,
         ]);
     }
+
 
     /**
      * Actualiza una tienda existente.

@@ -70,4 +70,14 @@ class Store extends Model
     {
         return $this->belongsToMany(User::class);
     }
+
+    public function registers(): HasMany
+    {
+        return $this->hasMany(Register::class, 'store_id');
+    }
+
+    public function sales(): HasMany
+    {
+        return $this->hasMany(Sale::class, 'store_id'); // por defecto 'store_id'
+    }
 }

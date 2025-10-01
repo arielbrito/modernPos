@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Store;
+use App\Observers\StoreObserver;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -46,5 +48,7 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(60)->by(optional($request->user())->id ?: $request->ip()),
             ];
         });
+
+        Store::observe(StoreObserver::class);
     }
 }
