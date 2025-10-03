@@ -3,34 +3,39 @@ import { router } from '@inertiajs/react';
 import * as React from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
-interface PurchaseFilters {
-    search: string;
-    status: string;
+export interface PurchaseFilters {
+    search?: string;
+    status?: string; // 'all' | 'draft' | 'approved' | 'received' | 'partially_received' | 'cancelled'...
 }
 
-export function usePurchaseFilters(initialFilters: PurchaseFilters) {
-    const [filters, setFilters] = React.useState(initialFilters);
+const normalize = (f?: PurchaseFilters): Required<PurchaseFilters> => ({
+    search: (f?.search ?? '').trim(),
+    status: f?.status ?? 'all',
+});
 
-    // Creamos una función "debounced" para que la petición no se envíe en cada tecleo.
-    const debouncedSubmit = useDebouncedCallback((newFilters: PurchaseFilters) => {
-        router.get(PurchaseController.index(), {
+export function usePurchaseFilters(initial: PurchaseFilters) {
+    const [filters, setFilters] = React.useState<Required<PurchaseFilters>>(() => normalize(initial));
+
+    // Submit con debounce para no disparar una request por tecla
+    const debouncedSubmit = useDebouncedCallback((newFilters: Required<PurchaseFilters>) => {
+        router.get(PurchaseController.index.url(), newFilters, {
             preserveState: true,
             preserveScroll: true,
             replace: true,
         });
-    }, 300); // 300ms de retraso
+    }, 300);
 
     const handleFilterChange = (key: keyof PurchaseFilters, value: string) => {
-        const newFilters = { ...filters, [key]: value };
+        const newFilters = normalize({ ...filters, [key]: value });
         setFilters(newFilters);
         debouncedSubmit(newFilters);
     };
 
     const clearFilters = () => {
-        const clearedFilters = { search: '', status: 'all' };
-        setFilters(clearedFilters);
-        // Para limpiar, hacemos la petición inmediatamente.
-        router.get(PurchaseController.index(), clearedFilters, {
+        const cleared = normalize({ search: '', status: 'all' });
+        setFilters(cleared);
+        // Limpieza inmediata (sin debounce)
+        router.get(PurchaseController.index.url(), cleared, {
             preserveState: true,
             preserveScroll: true,
             replace: true,

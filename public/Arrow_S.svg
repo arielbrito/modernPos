@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <mask id="cut">
+      <rect width="1024" height="1024" fill="white"/>
+      <!-- chevron cut (negative space) -->
+      <path d="M 307.2 614.4 L 512.0 409.6 L 716.8 614.4" fill="none" stroke="black" stroke-width="184" stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <!-- S bars -->
+  <g mask="url(#cut)">
+    <rect x="184.32" y="266.24" width="655.36" height="225" rx="112" fill="#2C2C2C"/>
+    <rect x="184.32" y="614.4" width="655.36" height="225" rx="112" fill="#2C2C2C"/>
+  </g>
+  <!-- Accent notch (tiny upward tick) -->
+  <path d="M 512.0 409.6 L 593.92 327.68 L 634.88 368.64" fill="#3AB795"/>
+</svg>

@@ -56,10 +56,11 @@ import sales from '@/routes/sales';
 import admin from '@/routes/admin';
 import adjustments from '@/routes/inventory/adjustments';
 import returns from '@/routes/sales/returns';
-import purchaseReturns from '@/routes/purchaseReturns';
+import PurchaseReturnController from '@/actions/App/Http/Controllers/Inventory/PurchaseReturnController';
 import roles from '@/routes/settings/roles';
 import alerts from '@/routes/settings/alerts';
 import receipts from '@/routes/settings/receipts';
+
 
 /**
  * Configuración de navegación principal
@@ -107,7 +108,7 @@ const mainNavItems: NavItem[] = [
         children: [
             { title: 'Productos', href: products.index.url(), icon: ScanBarcode, permission: 'products.view' },
             { title: 'Compras', href: purchases.index.url(), icon: ShoppingBag, permission: 'purchases.view' },
-            { title: 'Devoluciones (Compra)', href: purchaseReturns.index.url(), icon: ArrowLeftRight, permission: 'purchase_returns.view' },
+            { title: 'Devoluciones (Compra)', href: PurchaseReturnController.index.url(), icon: ArrowLeftRight, permission: 'purchase_returns.view' },
             { title: 'Ajustes', href: adjustments.index.url(), icon: Package, permission: 'inventory_adjustments.view' },
         ],
     },

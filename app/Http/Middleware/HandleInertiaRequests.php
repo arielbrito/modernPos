@@ -150,6 +150,7 @@ class HandleInertiaRequests extends Middleware
             'active_store_id' => $storeId,
             'active_register' => $activeRegister,
             'active_shift_id' => $shiftId,
+            'has_active_shift' => (bool)$shiftId,
             // 'active_shift'     => $activeShift, // opcional
         ];
     }

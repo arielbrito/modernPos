@@ -37,11 +37,11 @@ Route::post('/cash/registers/{register}/toggle', [RegisterController::class, 'to
 Route::get('/cash/registers/{register}/cashbook', [RegisterController::class, 'cashbook'])
     ->name('cash.registers.cashbook.show');
 
-Route::get('{register}/shift/open', [RegisterController::class, 'openShiftForm'])
-    ->name('shift.open.form');
+Route::get('/cash/registers/{register}/shift/open', [RegisterController::class, 'openShiftForm'])
+    ->name('cash.registers.shift.open.form');
 
 // Página (form) para cerrar turno
-Route::get('shifts/{shift}/close', [RegisterController::class, 'closeShiftForm'])
+Route::get('/cash/shifts/{shift}/close', [RegisterController::class, 'closeShiftForm'])
     ->name('cash.shifts.close.form');
 
 Route::get('/cash/shifts/{shift}/report', [CashShiftReportController::class, 'show'])

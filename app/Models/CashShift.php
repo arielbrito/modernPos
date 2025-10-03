@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Support\Collection; // 1. Importar Collection para el type hint
 use Illuminate\Support\Facades\DB; // 2. Importar DB
+use Illuminate\Database\Eloquent\Builder;
 
 
 #[UsePolicy(CashShiftPolicy::class)]
@@ -49,7 +50,7 @@ class CashShift extends Model
         return $this->hasMany(CashMovement::class, 'shift_id');
     }
 
-    public function scopeOpen($q)
+    public function scopeOpen(Builder $q): Builder
     {
         return $q->where('status', 'open')->whereNull('closed_at');
     }

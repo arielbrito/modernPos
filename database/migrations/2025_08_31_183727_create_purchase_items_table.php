@@ -17,6 +17,7 @@ return new class extends Migration
             $table->foreignId('product_variant_id')->constrained()->restrictOnDelete();
             $table->decimal('qty_ordered', 12, 2);
             $table->decimal('qty_received', 12, 2)->default(0);
+            $table->decimal('qty_returned', 12, 2)->default(0)->after('qty_received');
             $table->decimal('unit_cost', 14, 4); // costo base sin impuestos
             $table->decimal('discount_pct', 6, 3)->default(0);
             $table->decimal('discount_amount', 14, 4)->default(0);
@@ -25,6 +26,8 @@ return new class extends Migration
             $table->decimal('landed_cost_alloc', 14, 4)->default(0); // prorrateo flete/otros
             $table->decimal('line_total', 14, 2); // total final de la línea
             $table->timestamps();
+
+            $table->index(['purchase_id', 'product_variant_id']);
 
             $table->index('product_variant_id');
         });

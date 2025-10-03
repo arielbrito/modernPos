@@ -58,7 +58,7 @@ class InventoryAdjustmentService
                     'product_variant_id' => $variantId,
                     'store_id'           => $storeId,
                     'type'               => $movementType,
-                    'quantity'           => $quantityChange,
+                    'quantity'           => abs($quantityChange),
                     'unit_price'         => $inventory->variant->average_cost,
                     'subtotal'           => abs($quantityChange) * $inventory->variant->average_cost,
                     'user_id'            => $userId,

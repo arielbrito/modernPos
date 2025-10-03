@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Database\Eloquent\Builder;
 
 class ProductStockMovement extends Model
 {
@@ -50,9 +51,10 @@ class ProductStockMovement extends Model
 
     public function getSignedQuantityAttribute(): float
     {
-        return in_array($this->type, ['sale_exit', 'adjustment_out'])
-            ? -abs((float) $this->quantity)
-            : abs((float) $this->quantity);
+        $outTypes = ['sale_exit', 'adjustment_out', 'purchase_return_exit'];
+        return in_array($this->type, $outTypes, true)
+            ? -abs((float)$this->quantity)
+            : abs((float)$this->quantity);
     }
 
     public function getTypeLabelAttribute(): string
@@ -62,7 +64,21 @@ class ProductStockMovement extends Model
             'sale_exit'      => 'Salida por venta',
             'adjustment_in'  => 'Ajuste (+)',
             'adjustment_out' => 'Ajuste (−)',
+            'sale_return_entry'    => 'Entrada por devolución de venta',
+            'purchase_return_exit' => 'Salida por devolución de compra',
             default          => ucfirst(str_replace('_', ' ', (string) $this->type)),
         };
+    }
+
+
+    // ===== Scopes =====
+    public function scopeFor(Builder $q, int $storeId, int $variantId): Builder
+    {
+        return $q->where('store_id', $storeId)->where('product_variant_id', $variantId);
+    }
+    public function scopeBetween(Builder $q, $from = null, $to = null): Builder
+    {
+        return $q->when($from, fn($x) => $x->where('created_at', '>=', $from))
+            ->when($to,   fn($x) => $x->where('created_at', '<=', $to));
     }
 }

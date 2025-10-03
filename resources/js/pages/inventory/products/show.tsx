@@ -62,6 +62,8 @@ import {
 } from 'lucide-react';
 
 
+const IN_TYPES = new Set(['purchase_entry', 'sale_return_entry', 'adjustment_in']);
+const OUT_TYPES = new Set(['sale_exit', 'purchase_return_exit', 'adjustment_out']);
 
 type Variant = {
     id: number;
@@ -95,10 +97,19 @@ type StockSummary = {
 type Movement = {
     id: number;
     date: string;
-    type: 'purchase_entry' | 'sale_exit' | 'adjustment_in' | 'adjustment_out' | 'purchase_return_exit' | 'sale_return_entry';
+    type:
+    | 'purchase_entry'
+    | 'sale_exit'
+    | 'adjustment_in'
+    | 'adjustment_out'
+    | 'purchase_return_exit'
+    | 'sale_return_entry';
+    type_label?: string;           // <- nuevo (opcional por si no viene)
     quantity: number | string;
     unit_price: number | string;
     subtotal: number | string;
+    signed_quantity?: number;      // <- nuevo (preferido en UI)
+    signed_subtotal?: number;      // <- nuevo (preferido en UI)
     store?: { id: number; name: string } | null;
     variant?: { id: number; sku: string } | null;
     user?: { id: number; name: string } | null;
@@ -228,19 +239,23 @@ export default function Show({
     }, [stock]);
 
     const movementStats = useMemo(() => {
-        const last30Days = movements.filter(m => {
-            const moveDate = new Date(m.date);
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            return moveDate >= thirtyDaysAgo;
-        });
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        const entries = last30Days.filter(m => m.type === 'purchase_entry' || m.type === 'adjustment_in');
-        const exits = last30Days.filter(m => m.type === 'sale_exit' || m.type === 'adjustment_out');
+        const last30Days = movements.filter(m => new Date(m.date) >= thirtyDaysAgo);
 
-        const totalEntries = entries.reduce((sum, m) => sum + Number(m.quantity), 0);
-        const totalExits = exits.reduce((sum, m) => sum + Number(m.quantity), 0);
-        const netMovement = totalEntries - totalExits;
+        const totalEntries = last30Days
+            .filter(m => IN_TYPES.has(m.type))
+            .reduce((sum, m) => sum + Math.abs(Number(m.signed_quantity ?? m.quantity)), 0);
+
+        const totalExits = last30Days
+            .filter(m => OUT_TYPES.has(m.type))
+            .reduce((sum, m) => sum + Math.abs(Number(m.signed_quantity ?? m.quantity)), 0);
+
+        const netMovement = last30Days.reduce(
+            (sum, m) => sum + Number(m.signed_quantity ?? (IN_TYPES.has(m.type) ? +m.quantity : -m.quantity)),
+            0
+        );
 
         return {
             totalMovements: last30Days.length,
@@ -250,6 +265,7 @@ export default function Show({
             trend: netMovement > 0 ? 'positive' : netMovement < 0 ? 'negative' : 'neutral'
         };
     }, [movements]);
+
 
     const variantStats = useMemo(() => {
         const totalCost = product.variants.reduce((sum, v) => sum + Number(v.cost_price), 0);
@@ -888,6 +904,18 @@ export default function Show({
                                                             Ajuste −
                                                         </div>
                                                     </SelectItem>
+                                                    <SelectItem value="purchase_return_exit">
+                                                        <div className="flex items-center gap-2">
+                                                            <ArrowLeft className="h-4 w-4" />
+                                                            Salida (Devolución Compra)
+                                                        </div>
+                                                    </SelectItem>
+                                                    <SelectItem value="sale_return_entry">
+                                                        <div className="flex items-center gap-2">
+                                                            <ExternalLink className="h-4 w-4" />
+                                                            Entrada (Devolución Venta)
+                                                        </div>
+                                                    </SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </div>
@@ -954,37 +982,44 @@ export default function Show({
                                     </div>
 
                                     {/* Estadísticas de movimientos filtrados */}
+                                    {/* Estadísticas de movimientos filtrados */}
                                     {filtered.length > 0 && (
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-background border rounded-lg">
                                             <div className="text-center">
                                                 <div className="text-2xl font-bold text-green-600">
-                                                    {filtered.filter(m => m.type === 'purchase_entry' || m.type === 'adjustment_in').length}
+                                                    {filtered.filter(m => IN_TYPES.has(m.type)).length}
                                                 </div>
                                                 <div className="text-xs text-muted-foreground">Entradas</div>
                                             </div>
                                             <div className="text-center">
                                                 <div className="text-2xl font-bold text-red-600">
-                                                    {filtered.filter(m => m.type === 'sale_exit' || m.type === 'adjustment_out').length}
+                                                    {filtered.filter(m => OUT_TYPES.has(m.type)).length}
                                                 </div>
                                                 <div className="text-xs text-muted-foreground">Salidas</div>
                                             </div>
                                             <div className="text-center">
                                                 <div className="text-2xl font-bold">
-                                                    {filtered.reduce((sum, m) => {
-                                                        const qty = Number(m.quantity);
-                                                        return sum + (m.type.includes('in') || m.type === 'purchase_entry' ? qty : -qty);
-                                                    }, 0)}
+                                                    {filtered.reduce(
+                                                        (sum, m) => sum + Number(m.signed_quantity ?? (IN_TYPES.has(m.type) ? +m.quantity : -m.quantity)),
+                                                        0
+                                                    )}
                                                 </div>
                                                 <div className="text-xs text-muted-foreground">Neto</div>
                                             </div>
                                             <div className="text-center">
                                                 <div className="text-2xl font-bold">
-                                                    {formatMoney(filtered.reduce((sum, m) => sum + Number(m.subtotal), 0))}
+                                                    {formatMoney(
+                                                        filtered.reduce(
+                                                            (sum, m) => sum + Number(m.signed_subtotal ?? (Number(m.unit_price) * (IN_TYPES.has(m.type) ? +m.quantity : -m.quantity))),
+                                                            0
+                                                        )
+                                                    )}
                                                 </div>
                                                 <div className="text-xs text-muted-foreground">Valor</div>
                                             </div>
                                         </div>
                                     )}
+
 
                                     {/* Tabla de movimientos */}
                                     <div className="rounded-md border">
@@ -1039,7 +1074,7 @@ export default function Show({
                                                                 <TableCell>
                                                                     <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${typeTone[m.type]}`}>
                                                                         <TypeIcon className="h-3 w-3" />
-                                                                        {typeLabel[m.type]}
+                                                                        {m.type_label ?? typeLabel[m.type]}
                                                                     </div>
                                                                 </TableCell>
                                                                 <TableCell>
@@ -1072,13 +1107,12 @@ export default function Show({
                                                                     )}
                                                                 </TableCell>
                                                                 <TableCell className="text-right">
-                                                                    <span className={`font-medium ${m.type === 'sale_exit' || m.type === 'adjustment_out'
-                                                                        ? 'text-red-600'
-                                                                        : 'text-green-600'
-                                                                        }`}>
-                                                                        {m.type === 'sale_exit' || m.type === 'adjustment_out' ? '-' : '+'}
-                                                                        {formatNumber(m.quantity)}
-                                                                    </span>
+                                                                    {(() => {
+                                                                        const sq = Number(m.signed_quantity ?? (IN_TYPES.has(m.type) ? +m.quantity : -m.quantity));
+                                                                        const color = sq < 0 ? 'text-red-600' : 'text-green-600';
+                                                                        const sign = sq > 0 ? '+' : '';
+                                                                        return <span className={`font-medium ${color}`}>{sign}{formatNumber(Math.abs(sq))}</span>;
+                                                                    })()}
                                                                 </TableCell>
                                                                 <TableCell className="text-right font-medium">
                                                                     {formatMoney(m.unit_price)}

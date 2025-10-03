@@ -319,6 +319,7 @@ export interface PurchaseReturn {
         name: string;
     };
     purchase?: Purchase; // Relación opcional
+    status?: any;
     // Añade aquí cualquier otro campo que necesites en el futuro
 }
 
@@ -379,6 +380,7 @@ export interface InventoryAdjustment {
     items_count: number; // Este viene de withCount
     user?: User; // Relación opcional
     store: Store; // Relación requerida
+    notes?: string;
 }
 
 export interface Customer {

@@ -25,6 +25,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['store_id', 'product_variant_id']);
+            $table->index(['store_id', 'quantity']); // para reabastecimiento bajo umbral
         });
     }
 

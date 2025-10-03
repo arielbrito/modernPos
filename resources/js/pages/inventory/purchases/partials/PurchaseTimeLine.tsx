@@ -1,61 +1,93 @@
+// resources/js/pages/inventory/purchases/partials/PurchaseTimeLine.tsx
 import * as React from "react";
 import type { PurchaseStatus } from "@/types";
 import { CheckCircle, PackageCheck, PackagePlus, XCircle } from "lucide-react";
 
-// The order of the steps in the timeline
-const STEP_ORDER: readonly PurchaseStatus[] = ["draft", "approved", "partially_received", "received"];
+// Orden lógico de pasos (sin "cancelled")
+const STEP_ORDER: readonly PurchaseStatus[] = [
+    "draft",
+    "approved",
+    "partially_received",
+    "received",
+];
 
-// The definition for a single step in the timeline
+type IconCmp = React.ComponentType<{ className?: string }>;
+
 interface TimelineStepProps {
     label: string;
-    icon: React.ReactElement;
+    icon: IconCmp;
     isDone: boolean;
     isCurrent: boolean;
     isLast: boolean;
     isCancelled: boolean;
 }
 
-// The visual component for a single step
-const TimelineStep: React.FC<TimelineStepProps> = ({ label, icon, isDone, isCurrent, isLast, isCancelled }) => {
-    const textColor = isCancelled ? "text-red-500" : isDone ? "text-foreground" : "text-muted-foreground";
-    const bgColor = isDone && !isCancelled ? "bg-primary text-primary-foreground" : "bg-muted";
+const TimelineStep: React.FC<TimelineStepProps> = ({
+    label,
+    icon: Icon,
+    isDone,
+    isCurrent,
+    isLast,
+    isCancelled,
+}) => {
+    const textColor = isCancelled
+        ? "text-red-500"
+        : isDone
+            ? "text-foreground"
+            : "text-muted-foreground";
+
+    const dotClasses = [
+        "flex h-6 w-6 items-center justify-center rounded-full",
+        isDone && !isCancelled ? "bg-primary text-primary-foreground" : "bg-muted",
+        isCurrent && !isCancelled ? "ring-2 ring-primary/60 ring-offset-2 ring-offset-background" : "",
+    ]
+        .filter(Boolean)
+        .join(" ");
 
     return (
         <>
-            <div className={`flex items-center gap-2 ${textColor}`}>
-                <div className={`flex h-6 w-6 items-center justify-center rounded-full ${bgColor}`}>
-                    <div className={`h-4 w-4 ${isDone && !isCancelled ? '' : 'text-muted-foreground'}`}>
-                        {icon}
-                    </div>
+            <div
+                className={`flex items-center gap-2 ${textColor}`}
+                aria-current={isCurrent && !isCancelled ? "step" : undefined}
+            >
+                <div className={dotClasses} aria-hidden="true">
+                    <Icon className="h-4 w-4" />
                 </div>
-                <span className={`text-xs font-medium ${isCurrent ? 'font-bold' : ''}`}>
-                    {label}
-                </span>
+                <span className={`text-xs ${isCurrent ? "font-semibold" : "font-medium"}`}>{label}</span>
             </div>
+
             {!isLast && (
-                <div className={`mx-4 h-px w-12 ${isDone && !isCancelled ? "bg-primary" : "bg-border"}`} />
+                <div
+                    className={`mx-4 h-px w-12 ${isDone && !isCancelled ? "bg-primary" : "bg-border"
+                        }`}
+                    aria-hidden="true"
+                />
             )}
         </>
     );
 };
 
-// The main exportable component that builds the timeline
 export const PurchaseTimeline: React.FC<{ status: PurchaseStatus }> = ({ status }) => {
-    const activeIndex = STEP_ORDER.indexOf(status);
     const isCancelled = status === "cancelled";
 
-    const steps = [
-        { key: "draft", label: "Creada", icon: <PackagePlus className="h-4 w-4" /> },
-        { key: "approved", label: "Aprobada", icon: <CheckCircle className="h-4 w-4" /> },
-        // We can combine the logic for partial and full reception for a cleaner timeline
-        { key: "received", label: "Recibida", icon: <PackageCheck className="h-4 w-4" /> },
+    // Unificamos "partially_received" y "received" como un solo paso “Recibida”
+    const steps: Array<{ key: string; label: string; icon: IconCmp }> = [
+        { key: "draft", label: "Creada", icon: PackagePlus },
+        { key: "approved", label: "Aprobada", icon: CheckCircle },
+        { key: "received", label: "Recibida", icon: PackageCheck },
     ];
 
-    // Adjust active index for combined 'received' step
-    const adjustedActiveIndex = status === 'partially_received' ? 2 : activeIndex;
+    const adjustedActiveIndex =
+        status === "cancelled"
+            ? -1
+            : status === "received" || status === "partially_received"
+                ? 2
+                : status === "approved"
+                    ? 1
+                    : 0;
 
     return (
-        <div className="flex items-center">
+        <div className="flex items-center" role="group" aria-label="Estado de la compra">
             {steps.map((step, i) => (
                 <TimelineStep
                     key={step.key}
@@ -67,9 +99,10 @@ export const PurchaseTimeline: React.FC<{ status: PurchaseStatus }> = ({ status 
                     isCancelled={isCancelled}
                 />
             ))}
+
             {isCancelled && (
                 <span className="ml-4 flex items-center gap-2 text-sm font-semibold text-red-600">
-                    <XCircle className="h-4 w-4" />
+                    <XCircle className="h-4 w-4" aria-hidden="true" />
                     Cancelada
                 </span>
             )}

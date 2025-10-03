@@ -88,4 +88,19 @@ class ProductVariant extends Model
     {
         return $this->is_taxable;
     }
+
+
+    // ===== Scopes útiles =====
+    public function scopeActive(Builder $q): Builder
+    {
+        return $q->where('is_active', true);
+    }
+    public function scopeBySku(Builder $q, string $sku): Builder
+    {
+        return $q->where('sku', $sku);
+    }
+    public function scopeByBarcode(Builder $q, string $barcode): Builder
+    {
+        return $q->where('barcode', $barcode);
+    }
 }

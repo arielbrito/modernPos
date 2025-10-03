@@ -63,6 +63,16 @@ class PurchaseController extends Controller
             // ¡Importante! Agrega los parámetros de la URL a los links de paginación
             ->withQueryString();
 
+        // ✅ inyectamos true_balance por ítem
+        $purchases->getCollection()->transform(function ($p) {
+            $grand   = (float) $p->grand_total;
+            $paid    = (float) $p->paid_total;
+            $returns = (float) ($p->returns_total ?? 0);
+            // si quieres no permitir negativos, usa max(0, …)
+            $p->true_balance = max(0, $grand - $paid - $returns);
+            return $p;
+        });
+
         return inertia('inventory/purchases/index', [
             'compras' => $purchases,
             // Pasamos los filtros de vuelta a la vista para mantener el estado del input
@@ -112,6 +122,23 @@ class PurchaseController extends Controller
         $purchase->update(['status' => 'approved', 'approved_by' => Auth::id()]);
         return back()->with('success', 'Compra aprobada.');
     }
+
+    public function receiveForm(Purchase $purchase)
+    {
+        $this->authorize('receive', $purchase);
+
+        $purchase->load([
+            'supplier:id,name',
+            'items:id,purchase_id,product_variant_id,qty_ordered,qty_received,unit_cost',
+            'items.productVariant:id,sku,product_id',
+            'items.productVariant.product:id,name',
+        ]);
+
+        return Inertia::render('inventory/purchases/receive', [
+            'purchase' => $purchase,
+        ]);
+    }
+
 
     public function receive(Purchase $purchase, ReceivePurchaseRequest $request)
     {
@@ -293,5 +320,27 @@ class PurchaseController extends Controller
 
         return redirect()->route('inventory.purchases.show', $purchase)
             ->with('success', 'Compra actualizada exitosamente.');
+    }
+
+    public function print(Purchase $purchase)
+    {
+        $purchase->load([
+            'supplier',
+            'store',
+            'items.productVariant.product',
+            'items.productVariant',
+        ]);
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('prints.purchase_order', [
+            'purchase' => $purchase,
+        ]);
+
+        // soporta ?download=1 con los enlaces del front (igual que returns)
+        if (request()->boolean('download')) {
+            return $pdf->download("compra-{$purchase->code}.pdf");
+        }
+
+        // soporta ?paper=a4|letter (si quieres más adelante)
+        return $pdf->stream("compra-{$purchase->code}.pdf");
     }
 }

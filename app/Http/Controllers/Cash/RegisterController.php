@@ -192,6 +192,10 @@ class RegisterController extends Controller
             'active_shift_id'    => $openShift?->id,
         ]);
 
+        if (!$openShift) {
+            session()->forget('active_shift_id');
+        }
+
         return to_route('cash.registers.cashbook.show', $register)
             ->with('success', 'Caja activa cambiada a "' . $register->name . '".');
     }

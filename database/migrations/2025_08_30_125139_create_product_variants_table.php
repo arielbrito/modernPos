@@ -39,10 +39,19 @@ return new class extends Migration
             // $table->index('barcode');
         });
 
-        DB::statement("ALTER TABLE product_variants
-            ADD CONSTRAINT product_variants_tax_rate_range
-            CHECK (tax_rate IS NULL OR (tax_rate >= 0 AND tax_rate <= 1))");
-        DB::statement("CREATE INDEX IF NOT EXISTS product_variants_is_taxable_idx ON product_variants (is_taxable)");
+        $driver = Schema::getConnection()->getDriverName();
+        if ($driver === 'pgsql') {
+            DB::statement("ALTER TABLE product_variants
+                ADD CONSTRAINT product_variants_tax_rate_range
+                CHECK (tax_rate IS NULL OR (tax_rate >= 0 AND tax_rate <= 1))");
+            DB::statement("CREATE INDEX IF NOT EXISTS product_variants_is_taxable_idx ON product_variants (is_taxable)");
+        } elseif ($driver === 'mysql') {
+            // MySQL 8 respeta CHECK; en versiones antiguas los ignora sin romper.
+            DB::statement("ALTER TABLE product_variants
+                ADD CONSTRAINT product_variants_tax_rate_range
+                CHECK (tax_rate IS NULL OR (tax_rate >= 0 AND tax_rate <= 1))");
+            DB::statement("CREATE INDEX product_variants_is_taxable_idx ON product_variants (is_taxable)");
+        }
     }
 
     /**

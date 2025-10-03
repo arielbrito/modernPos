@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="none"/>
+  <g fill="none" stroke="#3AB795" stroke-linecap="round" stroke-linejoin="round" stroke-width="80">
+    <!-- "S": two horizontal lines + short mid link -->
+    <path d="M 225.28 307.2 H 798.72" />
+    <path d="M 225.28 716.8 H 716.8" />
+    <path d="M 225.28 307.2 V 512.0 H 716.8"/>
+    <!-- "R" stem -->
+    <path d="M 634.88 286.72 V 737.28" />
+    <!-- "R" bowl -->
+    <path d="M 634.88 286.72 H 819.2 A 122.88 122.88 0 0 1 634.88 532.48"/>
+    <!-- Arrow leg -->
+    <path d="M 634.88 532.48 L 839.68 737.28" />
+    <!-- Arrow tip -->
+    <path d="M 808.96 675.84 L 880.64 716.8 L 839.68 634.88 Z" fill="#3AB795" stroke="none"/>
+  </g>
+</svg>

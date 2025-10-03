@@ -82,6 +82,7 @@ class PurchaseReceivingService
                     'average_cost' => round($avgNuevo, 4),
                 ]);
 
+                $item->refresh();
 
                 if ((float)$item->qty_received < (float)$item->qty_ordered) {
                     $allReceived = false;

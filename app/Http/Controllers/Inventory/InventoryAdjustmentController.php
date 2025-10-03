@@ -16,6 +16,9 @@ use Illuminate\Support\Carbon; // <-- Añadir import
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class InventoryAdjustmentController extends Controller
 {
@@ -177,13 +180,93 @@ class InventoryAdjustmentController extends Controller
      */
     public function print(InventoryAdjustment $adjustment)
     {
-        $adjustment->load(['store', 'user', 'items.variant.product']);
+        $adjustment->load(['store', 'user', 'items.variant.product', 'stockMovements']);
+
+        // KPIs del ajuste (solo movimientos de ajuste vinculados a este documento)
+        $entriesUnits = (float) $adjustment->stockMovements()
+            ->where('type', 'adjustment_in')
+            ->sum('quantity');
+
+        $exitsUnits = (float) $adjustment->stockMovements()
+            ->where('type', 'adjustment_out')
+            ->sum(DB::raw('ABS(quantity)'));
+
+        $netUnits = $entriesUnits - $exitsUnits;
+
+        $valueIn  = (float) $adjustment->stockMovements()
+            ->where('type', 'adjustment_in')
+            ->sum('subtotal');
+
+        $valueOut = (float) $adjustment->stockMovements()
+            ->where('type', 'adjustment_out')
+            ->sum('subtotal');
+
+        $netValue = $valueIn - $valueOut;
+
+        // Logo base64 (cacheado 24h). Ruta esperada: public/storage/logo.png
+        $logoBase64 = Cache::remember('print.logo.base64', 60 * 60 * 24, function () {
+            $path = public_path('storage/logo.png');
+            return file_exists($path)
+                ? 'data:image/png;base64,' . base64_encode(file_get_contents($path))
+                : null;
+        });
+
+        // QR base64 (si está disponible el paquete)
+        $qrBase64 = null;
+        try {
+            if (class_exists(\SimpleSoftwareIO\QrCode\Facades\QrCode::class)) {
+                $png = QrCode::format('png')
+                    ->size(90)->margin(0)
+                    ->generate(route('inventory.adjustments.show', $adjustment));
+                $qrBase64 = 'data:image/png;base64,' . base64_encode($png);
+            }
+        } catch (\Throwable $e) {
+            $qrBase64 = null;
+        }
+
+        // Opciones de impresión
+        $paper = request('paper', 'letter'); // 'letter' o 'a4'
+        $isCopy = (bool) request('copy', false);
+        $filename = "ajuste-{$adjustment->code}.pdf";
 
         $pdf = Pdf::loadView('prints.inventory_adjustment', [
-            'adjustment' => $adjustment
-        ]);
+            'adjustment'  => $adjustment,
+            'logoBase64'  => $logoBase64,
+            'qrBase64'    => $qrBase64,
+            'entriesUnits' => $entriesUnits,
+            'exitsUnits'  => $exitsUnits,
+            'netUnits'    => $netUnits,
+            'valueIn'     => $valueIn,
+            'valueOut'    => $valueOut,
+            'netValue'    => $netValue,
+            'isCopy'      => $isCopy,
+        ])->setPaper($paper);
 
-        // (Opcional) Puedes usar ->download() para forzar la descarga
-        return $pdf->stream("ajuste-{$adjustment->code}.pdf");
+        return request()->boolean('download')
+            ? $pdf->download($filename)
+            : $pdf->stream($filename);
+    }
+
+    private function pdfInlineImage(string $path): ?string
+    {
+        try {
+            // Si viene absoluta, úsala directamente
+            if (is_file($path)) {
+                $blob = file_get_contents($path);
+            } elseif (Storage::disk('public')->exists($path)) {
+                $blob = Storage::disk('public')->get($path);
+            } elseif (file_exists(public_path($path))) {
+                $blob = file_get_contents(public_path($path));
+            } else {
+                return null;
+            }
+
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $mime = $finfo->buffer($blob) ?: 'image/png';
+            $base64 = base64_encode($blob);
+            return "data:{$mime};base64,{$base64}";
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 }

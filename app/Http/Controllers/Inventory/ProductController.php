@@ -272,18 +272,28 @@ class ProductController extends Controller
                 ->latest()
                 ->limit(100)
                 ->get()
-                ->map(fn($m) => [
-                    'id'         => $m->id,
-                    'date'       => $m->created_at?->toIso8601String(),
-                    'type'       => $m->type,
-                    'quantity'   => $m->quantity,
-                    'unit_price' => $m->unit_price,
-                    'subtotal'   => $m->subtotal,
-                    'store'      => $m->store ? ['id' => $m->store->id, 'name' => $m->store->name] : null,
-                    'variant'    => $m->variant ? ['id' => $m->variant->id, 'sku' => $m->variant->sku] : null,
-                    'user'       => $m->user ? ['id' => $m->user->id, 'name' => $m->user->name] : null,
-                    'notes'      => $m->notes,
-                ]);
+                ->map(function ($m) {
+                    $sign = match ($m->type) {
+                        'sale_exit', 'purchase_return_exit', 'adjustment_out' => -1,
+                        default => 1,
+                    };
+
+                    return [
+                        'id'               => $m->id,
+                        'date'             => $m->created_at?->toIso8601String(),
+                        'type'             => $m->type,
+                        'type_label'       => $m->type_label,
+                        'quantity'         => (float) $m->quantity,                  // crudo
+                        'signed_quantity'  => $sign * (float) $m->quantity,          // con signo
+                        'unit_price'       => (float) $m->unit_price,
+                        'subtotal'         => (float) $m->subtotal,                  // crudo
+                        'signed_subtotal'  => $sign * (float) $m->unit_price * (float) $m->quantity,
+                        'store'            => $m->store ? ['id' => $m->store->id, 'name' => $m->store->name] : null,
+                        'variant'          => $m->variant ? ['id' => $m->variant->id, 'sku' => $m->variant->sku] : null,
+                        'user'             => $m->user ? ['id' => $m->user->id, 'name' => $m->user->name] : null,
+                        'notes'            => $m->notes,
+                    ];
+                });
         }
 
         // Tiendas (para filtros y ajuste rápido)
@@ -350,13 +360,15 @@ class ProductController extends Controller
             : $product->variants()->pluck('id');
 
         // Helper para signo de movimientos
-        $signedExpr = "CASE WHEN type IN ('purchase_entry','adjustment_in') THEN quantity ELSE -quantity END";
+        $inTypes  = "('purchase_entry','sale_return_entry','adjustment_in')";
+        $outTypes = "('sale_exit','purchase_return_exit','adjustment_out')";
+        $signedExpr = "CASE WHEN type IN $inTypes THEN quantity WHEN type IN $outTypes THEN -quantity ELSE 0 END";
 
         // --- 1) Flujos diarios dentro del rango ---
         $flows = ProductStockMovement::query()
             ->selectRaw("DATE(created_at) as d")
-            ->selectRaw("SUM(CASE WHEN type IN ('purchase_entry','adjustment_in') THEN quantity ELSE 0 END) as in_qty")
-            ->selectRaw("SUM(CASE WHEN type IN ('sale_exit','adjustment_out') THEN quantity ELSE 0 END) as out_qty")
+            ->selectRaw("SUM(CASE WHEN type IN $inTypes  THEN quantity ELSE 0 END) as in_qty")
+            ->selectRaw("SUM(CASE WHEN type IN $outTypes THEN quantity ELSE 0 END) as out_qty")
             ->selectRaw("SUM($signedExpr) as net_qty")
             ->whereIn('product_variant_id', $variantIds)
             ->when($storeId, fn($q) => $q->where('store_id', $storeId))

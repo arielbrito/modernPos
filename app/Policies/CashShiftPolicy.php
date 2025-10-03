@@ -25,15 +25,23 @@ class CashShiftPolicy
     }
     public function open(User $u, Register $r): bool
     {
-        return $u->can('cash_shifts.open');
+        if (!$u->can('cash_shifts.open')) return false;
+        // la caja debe estar activa
+        return (bool)$r->active;
     }
     public function operate(User $u, CashShift $s): bool
     {
-        return $u->can('cash_shifts.operate') && $s->status === 'open';
+        if (!$u->can('cash_shifts.operate')) return false;
+        return $s->status === 'open' && is_null($s->closed_at);
     }
     public function close(User $u, CashShift $s): bool
     {
-        return $u->can('cash_shifts.close')   && $s->status === 'open';
+        if (!$u->can('cash.close')) return false;
+
+        // Quien lo abrió puede cerrarlo; supervisores con override también.
+        if ($u->id === (int)$s->opened_by) return true;
+
+        return $u->can('cash_shifts.close');
     }
     public function forceClose(User $u, CashShift $s): bool
     {

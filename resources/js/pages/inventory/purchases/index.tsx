@@ -24,24 +24,54 @@ import { money } from "@/utils/inventory";
 import PurchaseController from "@/actions/App/Http/Controllers/Inventory/PurchaseController";
 
 interface Props {
-    compras: Paginated<Purchase & { returns_total: number | null, true_balance: number }>;
-    filters: { search: string; status: string; };
+    // Mantengo tu nombre 'compras' para no romper nada,
+    // pero normalizo números dentro del componente.
+    compras: Paginated<
+        Purchase & {
+            returns_total: number | null;
+            true_balance?: number; // puede no venir del backend aún
+        }
+    >;
+    filters: { search?: string; status?: string };
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: "Compras", href: PurchaseController.index.url() }];
 
 export default function IndexPurchases({ compras, filters: initialFilters }: Props) {
-    // 1. Toda la lógica se extrae a los hooks. El componente principal es limpio.
+    // 1) Hooks de filtros/acciones
     const { filters, handleFilterChange, clearFilters } = usePurchaseFilters(initialFilters);
     const actions = usePurchaseActions();
 
-    // 2. Los cálculos complejos se mantienen aislados con useMemo.
-    const stats = React.useMemo(() => {
-        const totalBalance = compras.data.reduce((sum, p) => sum + p.true_balance, 0);
-        const draftCount = compras.data.filter(p => p.status === 'draft').length;
-        const totalPurchasedInPeriod = compras.data.reduce((sum, p) => sum + p.grand_total, 0);
-        return { totalBalance, draftCount, totalPurchasedInPeriod };
+    // 2) Normalización de datos (evita NaN/undefined y soporta true_balance opcional)
+    const normalized = React.useMemo(() => {
+        return compras.data.map((p) => {
+            const grand_total = Number((p as any).grand_total ?? 0);
+            const balance_total = Number((p as any).balance_total ?? 0);
+            const returns_total = Number((p as any).returns_total ?? 0);
+
+            // Si viene true_balance del backend lo uso; si no, lo calculo.
+            const true_balance =
+                typeof (p as any).true_balance !== "undefined"
+                    ? Number((p as any).true_balance)
+                    : balance_total - returns_total;
+
+            return {
+                ...p,
+                grand_total: isFinite(grand_total) ? grand_total : 0,
+                balance_total: isFinite(balance_total) ? balance_total : 0,
+                returns_total: isFinite(returns_total) ? returns_total : 0,
+                true_balance: isFinite(true_balance) ? true_balance : 0,
+            };
+        });
     }, [compras.data]);
+
+    // 3) KPIs seguros
+    const stats = React.useMemo(() => {
+        const totalBalance = normalized.reduce((sum, p) => sum + (p as any).true_balance, 0);
+        const draftCount = normalized.filter((p) => p.status === "draft").length;
+        const totalPurchasedInPeriod = normalized.reduce((sum, p) => sum + (p as any).grand_total, 0);
+        return { totalBalance, draftCount, totalPurchasedInPeriod };
+    }, [normalized]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -56,7 +86,9 @@ export default function IndexPurchases({ compras, filters: initialFilters }: Pro
                         <div>
                             <h1 className="text-2xl font-bold">Gestión de Compras</h1>
                             <p className="text-sm text-muted-foreground">
-                                {compras.total > 0 && `Mostrando ${compras.from}-${compras.to} de ${compras.total} registros`}
+                                {typeof compras.total === "number" && compras.total > 0
+                                    ? `Mostrando ${compras.from}-${compras.to} de ${compras.total} registros`
+                                    : "Sin resultados"}
                             </p>
                         </div>
                     </div>
@@ -65,11 +97,23 @@ export default function IndexPurchases({ compras, filters: initialFilters }: Pro
                     </Button>
                 </div>
 
-                {/* --- KPIS CARDS --- */}
+                {/* --- KPI CARDS --- */}
                 <div className="grid gap-4 md:grid-cols-3">
-                    <StatCard title="Total Comprado (Período)" value={money(stats.totalPurchasedInPeriod)} icon={<Package className="h-4 w-4 text-muted-foreground" />} />
-                    <StatCard title="Balance Pendiente Total" value={money(stats.totalBalance)} icon={<DollarSign className="h-4 w-4 text-muted-foreground" />} />
-                    <StatCard title="Compras en Borrador" value={String(stats.draftCount)} icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} />
+                    <StatCard
+                        title="Total Comprado (Período)"
+                        value={money(stats.totalPurchasedInPeriod)}
+                        icon={<Package className="h-4 w-4 text-muted-foreground" />}
+                    />
+                    <StatCard
+                        title="Balance Pendiente Total"
+                        value={money(stats.totalBalance)}
+                        icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
+                    />
+                    <StatCard
+                        title="Compras en Borrador"
+                        value={String(stats.draftCount)}
+                        icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />}
+                    />
                 </div>
 
                 <Card>
@@ -81,10 +125,11 @@ export default function IndexPurchases({ compras, filters: initialFilters }: Pro
                             onClearFilters={clearFilters}
                         />
                     </CardHeader>
+
                     <CardContent className="p-0">
-                        {compras.data.length > 0 ? (
+                        {normalized.length > 0 ? (
                             <>
-                                {/* --- VISTA DE TABLA Y MÓVIL --- */}
+                                {/* --- VISTA DE TABLA (desktop) --- */}
                                 <div className="hidden lg:block">
                                     <Table>
                                         <TableHeader className="sticky top-0 bg-background z-10">
@@ -94,18 +139,24 @@ export default function IndexPurchases({ compras, filters: initialFilters }: Pro
                                                 <TableHead>Estado</TableHead>
                                                 <TableHead>Factura / Fecha</TableHead>
                                                 <TableHead className="text-right">Total</TableHead>
-                                                <TableHead className="text-right">Devolucion</TableHead>
+                                                <TableHead className="text-right">Devolución</TableHead>
                                                 <TableHead className="text-right">Balance</TableHead>
                                                 <TableHead className="w-[80px] text-right">Acciones</TableHead>
                                             </TableRow>
                                         </TableHeader>
-                                        <TableBody>
-                                            {compras.data.map((p) => <PurchaseRow key={p.id} purchase={p} actions={actions} />)}
-                                        </TableBody>
+                                        <tbody>
+                                            {normalized.map((p) => (
+                                                <PurchaseRow key={p.id} purchase={p as any} actions={actions} />
+                                            ))}
+                                        </tbody>
                                     </Table>
                                 </div>
+
+                                {/* --- VISTA MÓVIL --- */}
                                 <div className="lg:hidden p-4 space-y-4">
-                                    {compras.data.map((p) => <MobilePurchaseCard key={p.id} purchase={p} actions={actions} />)}
+                                    {normalized.map((p) => (
+                                        <MobilePurchaseCard key={p.id} purchase={p as any} actions={actions} />
+                                    ))}
                                 </div>
 
                                 <div className="p-4 border-t">

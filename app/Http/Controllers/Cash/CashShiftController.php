@@ -43,10 +43,10 @@ class CashShiftController extends Controller
         // Clonamos la consulta ANTES de paginar para calcular totales sobre todos los resultados
         $kpiQuery = (clone $query);
         $kpis = [
-            'total_sales' => $kpiQuery->sum(DB::raw("CAST(meta->'variance'->>'total_sales' AS NUMERIC)")),
-            'net_variance' => $kpiQuery->sum(DB::raw("CAST(meta->'variance'->>'net_variance' AS NUMERIC)")),
-            'shifts_with_shortage' => (clone $kpiQuery)->where(DB::raw("CAST(meta->'variance'->>'net_variance' AS NUMERIC)"), '<', 0)->count(),
-            'shifts_with_surplus' => (clone $kpiQuery)->where(DB::raw("CAST(meta->'variance'->>'net_variance' AS NUMERIC)"), '>', 0)->count(),
+            'total_sales' => $kpiQuery->sum(DB::raw("COALESCE(CAST(meta->'variance'->>'total_sales' AS NUMERIC), 0)")),
+            'net_variance' => $kpiQuery->sum(DB::raw("COALESCE(CAST(meta->'variance'->>'net_variance' AS NUMERIC), 0)")),
+            'shifts_with_shortage' => (clone $kpiQuery)->where(DB::raw("COALESCE(CAST(meta->'variance'->>'net_variance' AS NUMERIC), 0)"), '<', 0)->count(),
+            'shifts_with_surplus' => (clone $kpiQuery)->where(DB::raw("COALESCE(CAST(meta->'variance'->>'net_variance' AS NUMERIC), 0)"), '>', 0)->count(),
         ];
 
         // --- 4. PAGINACIÓN ---
@@ -61,7 +61,7 @@ class CashShiftController extends Controller
         ]);
     }
 
-    public function open(OpenShiftRequest $r, Register $register, CashRegisterService $svc)
+    public function open(OpenShiftRequest $r, Register $register)
     {
         $this->authorize('open', [\App\Models\CashShift::class, $register]);
 
@@ -69,7 +69,7 @@ class CashShiftController extends Controller
         $opening = (array) $r->input('opening', []);
         $note    = (string) $r->input('note');
 
-        $shift = $svc->openShift($register, $r->user()->id, $opening, $note);
+        $shift = $this->svc->openShift($register, $r->user()->id, $opening, $note);
 
         // >>> FALTABA ESTO <<<
         $r->session()->put('active_register_id', $register->id);
@@ -126,7 +126,7 @@ class CashShiftController extends Controller
             []
         );
 
-        session(['active_shift_id' => null]);
+        $req->session()->forget('active_shift_id');
 
         return to_route('cash.registers.cashbook.show', $shift->register_id)
             ->with('success', 'Turno cerrado.');

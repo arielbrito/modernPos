@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Models\ProductStockMovement;
 use App\Models\Store;
+use App\Observers\ProductStockMovementObserver;
 use App\Observers\StoreObserver;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -50,5 +52,6 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Store::observe(StoreObserver::class);
+        // ProductStockMovement::observe(ProductStockMovementObserver::class);
     }
 }

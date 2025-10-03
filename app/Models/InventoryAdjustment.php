@@ -12,7 +12,7 @@ class InventoryAdjustment extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['store_id', 'user_id', 'code', 'type', 'reason', 'notes', 'adjustment_date'];
+    protected $fillable = ['store_id', 'user_id', 'code',  'reason', 'notes', 'adjustment_date'];
 
     protected $casts = ['adjustment_date' => 'datetime'];
 

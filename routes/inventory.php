@@ -53,35 +53,31 @@ Route::middleware(['auth'])->prefix('inventory')->name('inventory.')->group(func
     Route::controller(PurchaseController::class)
         ->prefix('purchases')
         ->name('purchases.')
-        // ->middleware(['auth', 'verified']) // Buen lugar para middleware general
         ->group(function () {
 
-            // --- Rutas de Colección (no dependen de una compra específica) ---
+            // Colección
             Route::get('/', 'index')->name('index');
             Route::get('/create', 'create')->name('create');
             Route::post('/', 'store')->name('store');
             Route::get('/search-products', 'searchProducts')->name('searchProducts');
 
-            // --- Rutas de Miembro (aplican a una compra específica) ---
+            // Miembro
             Route::prefix('{purchase}')->group(function () {
                 Route::get('/', 'show')->name('show');
 
-                // CORRECCIÓN: Movimos edit y update aquí dentro, donde pertenecen.
-                // Sus URIs y nombres ahora son mucho más simples y consistentes.
                 Route::get('/edit', 'edit')->name('edit')->middleware('can:update,purchase');
                 Route::put('/', 'update')->name('update')->middleware('can:update,purchase');
 
-                // Acciones sobre la compra
                 Route::post('/approve', 'approve')->name('approve');
                 Route::post('/receive', 'receive')->name('receive');
+                // Route::get('/receive', 'receiveForm')->name('receiveForm'); // <-- AÑADIDO
+
                 Route::post('/cancel', 'cancel')->name('cancel');
 
-                Route::post('/returns', [PurchaseReturnController::class, 'store'])->name('returns.store')->middleware('permission:purchase_returns.create');
+                Route::get('/print', 'print')->name('print'); // <-- AÑADIDO
 
-                // Pagos de la compra
                 Route::post('/payments', 'storePayment')->name('payments.store');
 
-                // Archivos adjuntos de la compra
                 Route::prefix('attachments')->name('attachments.')->group(function () {
                     Route::post('/', 'uploadAttachment')->name('upload');
                     Route::get('/{attachment}', 'downloadAttachment')->name('download');
@@ -92,33 +88,54 @@ Route::middleware(['auth'])->prefix('inventory')->name('inventory.')->group(func
 });
 
 //Rutas de devoluciones de compra
-Route::controller(PurchaseReturnController::class)->prefix('purchase-returns')->name('purchaseReturns.')->group(function () {
-    Route::get('/', 'index')->name('index')->middleware('permission:purchase_returns.view');
-    // Route::get('/{purchaseReturn}', 'show')->name('show');
-    // Route::post('/{purchaseReturn}/approve', 'approve')->name('approve');
-    // Route::post('/{purchaseReturn}/cancel', 'cancel')->name('cancel');
-});
+Route::controller(PurchaseReturnController::class)
+    ->prefix('purchases/returns')
+    ->name('purchases.returns.')
+    ->middleware('permission:purchase_returns.view')
+    ->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/create', 'create')->name('create');
+        Route::post('/', 'store')->name('store');
+
+        // helpers para el form
+        Route::get('/search-purchases', 'searchPurchases')->name('searchPurchases');
+        Route::get('/{purchase}/returnable-items', 'returnableItems')->name('returnableItems');
+
+        Route::get('/{return}', 'show')->name('show');
+        Route::get('/{return}/print', 'print')->name('print'); // ?paper=a4|letter&copy=1&download=1
+    });
 
 // Rutas para Ajustes de Inventario
 Route::controller(InventoryAdjustmentController::class)
     ->prefix('inventory/adjustments')
     ->name('inventory.adjustments.')
-    // ->middleware(['auth', 'verified']) // Un buen lugar para añadir la seguridad
+    // ->middleware(['auth', 'verified'])
     ->group(function () {
 
-        Route::get('/', 'index')->name('index'); // Para el listado de ajustes (futuro)
+        // -- Index/Listado
+        Route::get('/', 'index')->name('index');
+
+        // -- Crear (simple)
         Route::get('/create', 'create')->name('create');
         Route::post('/', 'store')->name('store');
-        Route::get('/{adjustment}', 'show')->name('show'); // Para ver un ajuste específico (futuro)
-        Route::get('/{adjustment}/print', 'print')->name('print');
 
-        Route::get('/bulk-adjust',  'bulkCreate')
+        // -- Crear (masivo / conteo)
+        Route::get('/bulk-adjust', 'bulkCreate')
             ->name('bulkCreate')
             ->middleware('permission:inventory_adjustments.create');
 
-        Route::post('bulk-adjust',  'bulkStore')
+        Route::post('/bulk-adjust', 'bulkStore')
             ->name('bulkStore')
             ->middleware('permission:inventory_adjustments.create');
+
+        // -- Dinámicas (SIEMPRE al final) + constraint numérico
+        Route::get('/{adjustment}', 'show')
+            ->whereNumber('adjustment')
+            ->name('show');
+
+        Route::get('/{adjustment}/print', 'print')
+            ->whereNumber('adjustment')
+            ->name('print');
     });
 
     // ...

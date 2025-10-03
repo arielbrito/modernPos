@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('inventory_adjustment_id')->constrained('inventory_adjustments')->cascadeOnDelete();
             $table->foreignId('product_variant_id')->constrained('product_variants')->restrictOnDelete();
-
+            $table->unique(['inventory_adjustment_id', 'product_variant_id']);
             $table->decimal('quantity', 12, 2)->comment('La cantidad que se ajusta (siempre positiva)');
             $table->decimal('previous_quantity', 12, 2)->comment('Stock que había antes del ajuste');
             $table->decimal('new_quantity', 12, 2)->comment('Stock que quedó después del ajuste');

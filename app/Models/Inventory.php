@@ -38,11 +38,12 @@ class Inventory extends Model
         return $this->belongsTo(ProductVariant::class, 'product_variant_id');
     }
 
-    // // Accesor útil para alertas (opcionalmente: protected $appends = ['low_stock'];)
-    // protected function lowStock(): Attribute
-    // {
-    //     return Attribute::get(fn() => $this->quantity <= $this->stock_alert_threshold);
-    // }
+    // Accesor útil para alertas (opcional)
+    protected $appends = ['low_stock'];
+    protected function lowStock(): Attribute
+    {
+        return Attribute::make(get: fn() => (float)$this->quantity <= (float)$this->stock_alert_threshold);
+    }
 
     // Scopes prácticos
     public function scopeLowStock($query)
