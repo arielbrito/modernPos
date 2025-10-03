@@ -15,6 +15,7 @@ use App\Models\Supplier;
 use App\Services\PurchaseCreationService;
 use App\Services\PurchaseReceivingService;
 use App\Services\PurchaseUpdateService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -24,6 +25,14 @@ use Inertia\Inertia;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\UploadedFile;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\PurchaseItemsExport;
+use App\Exports\PurchasesIndexExport;
+use App\Http\Requests\Inventory\Purchase\EmailPurchaseRequest;
+use App\Mail\PurchaseOrderMail;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\Rule;
 
 class PurchaseController extends Controller
 {
@@ -322,25 +331,230 @@ class PurchaseController extends Controller
             ->with('success', 'Compra actualizada exitosamente.');
     }
 
-    public function print(Purchase $purchase)
+    public function print(Purchase $purchase, Request $request)
     {
         $purchase->load([
-            'supplier',
             'store',
+            'supplier',
             'items.productVariant.product',
-            'items.productVariant',
         ]);
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('prints.purchase_order', [
+        $paper = in_array($request->get('paper'), ['a4', 'letter']) ? $request->get('paper') : 'letter';
+        $isCopy = $request->boolean('copy');
+        $download = $request->boolean('download');
+
+        $pdf = Pdf::loadView('prints.purchase_order', [
             'purchase' => $purchase,
+        ])->setPaper($paper); // 'a4' | 'letter'
+
+        $filename = 'compra-' . $purchase->code . ($isCopy ? '-copia' : '') . '.pdf';
+
+        if ($download) {
+            return $pdf->download($filename);
+        }
+        return $pdf->stream($filename);
+    }
+
+
+    public function exportCsv(Purchase $purchase): StreamedResponse
+    {
+        $purchase->load(['supplier', 'store', 'items.productVariant.product']);
+
+        $filename = 'compra-' . $purchase->code . '.csv';
+        $headers  = [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"$filename\"",
+        ];
+
+        return response()->streamDownload(function () use ($purchase) {
+            // BOM UTF-8 para Excel/Numbers
+            echo chr(0xEF) . chr(0xBB) . chr(0xBF);
+
+            $out = fopen('php://output', 'w');
+
+            // Encabezado contextual
+            fputcsv($out, ['Código', $purchase->code]);
+            fputcsv($out, ['Proveedor', optional($purchase->supplier)->name ?? '—']);
+            fputcsv($out, ['Tienda', optional($purchase->store)->name ?? '—']);
+            fputcsv($out, ['Factura', $purchase->invoice_number ?? '—']);
+            fputcsv($out, ['Fecha Factura', optional($purchase->invoice_date)?->format('d/m/Y') ?? '—']);
+            fputcsv($out, []); // línea en blanco
+
+            // Encabezados de ítems
+            fputcsv($out, [
+                'SKU',
+                'Producto',
+                'Cant. Ordenada',
+                'Cant. Recibida',
+                'Pendiente',
+                'Costo Unit.',
+                'Desc %',
+                'Imp %',
+                'Total Línea'
+            ]);
+
+            foreach ($purchase->items as $it) {
+                $sku   = $it->productVariant->sku ?? '';
+                $name  = $it->productVariant->product->name ?? '';
+                $qo    = (float) $it->qty_ordered;
+                $qr    = (float) $it->qty_received;
+                $pend  = max(0, $qo - $qr);
+                $unit  = (float) $it->unit_cost;
+                $disc  = (float) ($it->discount_pct ?? 0);
+                $tax   = (float) ($it->tax_pct ?? 0);
+                $total = (float) $it->line_total;
+
+                fputcsv($out, [$sku, $name, $qo, $qr, $pend, $unit, $disc, $tax, $total]);
+            }
+
+            // Totales
+            fputcsv($out, []); // blank
+            fputcsv($out, ['Subtotal', (float) $purchase->subtotal]);
+            if ((float)$purchase->discount_total > 0) {
+                fputcsv($out, ['Descuentos', (float) $purchase->discount_total]);
+            }
+            if ((float)$purchase->tax_total > 0) {
+                fputcsv($out, ['Impuestos', (float) $purchase->tax_total]);
+            }
+            if (((float)$purchase->freight + (float)$purchase->other_costs) > 0) {
+                fputcsv($out, ['Flete + Otros', (float)$purchase->freight + (float)$purchase->other_costs]);
+            }
+            fputcsv($out, ['Total', (float) $purchase->grand_total]);
+            if ((float)$purchase->paid_total > 0) {
+                fputcsv($out, ['Pagado', (float) $purchase->paid_total]);
+            }
+            fputcsv($out, ['Balance', (float) $purchase->balance_total]);
+
+            fclose($out);
+        }, $filename, $headers);
+    }
+
+    // --- EXPORTAR UNA COMPRA: XLSX ---
+    public function exportXlsx(Purchase $purchase)
+    {
+        $purchase->load(['supplier', 'store', 'items.productVariant.product']);
+        $filename = 'compra-' . $purchase->code . '.xlsx';
+        return Excel::download(new PurchaseItemsExport($purchase), $filename);
+    }
+
+    // --- (Opcional) Export del listado filtrado: CSV ---
+    public function exportIndexCsv(Request $request): StreamedResponse
+    {
+        $filters = $request->only('search', 'status');
+
+        $query = Purchase::query()
+            ->with('supplier')
+            ->withSum('returns as returns_total', 'total_value')
+            ->when($filters['search'] ?? null, function ($q, $search) {
+                $q->where(function ($qq) use ($search) {
+                    $qq->where('code', 'ilike', "%{$search}%")
+                        ->orWhereHas('supplier', fn($s) => $s->where('name', 'ilike', "%{$search}%"));
+                });
+            })
+            ->when(($filters['status'] ?? null) && $filters['status'] !== 'all', function ($q) use ($filters) {
+                $q->where('status', $filters['status']);
+            })
+            ->latest();
+
+        $filename = 'compras.csv';
+        $headers  = [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"$filename\"",
+        ];
+
+        return response()->streamDownload(function () use ($query) {
+            echo chr(0xEF) . chr(0xBB) . chr(0xBF);
+            $out = fopen('php://output', 'w');
+
+            fputcsv($out, ['Código', 'Proveedor', 'Estado', 'Factura', 'Fecha Factura', 'Total', 'Devoluciones', 'Balance']);
+            $query->chunk(500, function ($rows) use ($out) {
+                foreach ($rows as $p) {
+                    fputcsv($out, [
+                        $p->code,
+                        optional($p->supplier)->name ?? '—',
+                        $p->status,
+                        $p->invoice_number ?? '—',
+                        optional($p->invoice_date)?->format('d/m/Y') ?? '—',
+                        (float)$p->grand_total,
+                        (float)($p->returns_total ?? 0),
+                        (float)$p->true_balance ?? (float)$p->balance_total, // según tu cálculo
+                    ]);
+                }
+            });
+
+            fclose($out);
+        }, $filename, $headers);
+    }
+
+    // --- (Opcional) Export del listado filtrado: XLSX ---
+    public function exportIndexXlsx(Request $request)
+    {
+        return Excel::download(new PurchasesIndexExport($request->all()), 'compras.xlsx');
+    }
+
+
+
+    public function email(Purchase $purchase, Request $request)
+    {
+        $this->authorize('view', $purchase); // o la policy adecuada
+
+        // Permite strings (separados por coma) o arrays para to/cc/bcc
+        $normalize = function (mixed $v): array {
+            if (is_array($v)) return array_filter(array_map('trim', $v));
+            if (is_string($v)) return array_filter(array_map('trim', explode(',', $v)));
+            return [];
+        };
+
+        $data = $request->validate([
+            'to'      => ['required'],
+            'cc'      => ['nullable'],
+            'bcc'     => ['nullable'],
+            'subject' => ['nullable', 'string', 'max:150'],
+            'message' => ['nullable', 'string', 'max:3000'],
+            'paper'   => ['nullable', Rule::in(['letter', 'a4'])],
         ]);
 
-        // soporta ?download=1 con los enlaces del front (igual que returns)
-        if (request()->boolean('download')) {
-            return $pdf->download("compra-{$purchase->code}.pdf");
+        $to  = $normalize($data['to']);
+        $cc  = $normalize($data['cc'] ?? null);
+        $bcc = $normalize($data['bcc'] ?? null);
+
+        // Valida cada email individualmente
+        $validateEmail = fn(string $e) => validator(['e' => $e], ['e' => 'email:rfc,dns'])->passes();
+        foreach (['to' => $to, 'cc' => $cc, 'bcc' => $bcc] as $k => $list) {
+            foreach ($list as $email) {
+                if (!$validateEmail($email)) {
+                    throw ValidationException::withMessages([$k => "Correo inválido: {$email}"]);
+                }
+            }
         }
 
-        // soporta ?paper=a4|letter (si quieres más adelante)
-        return $pdf->stream("compra-{$purchase->code}.pdf");
+        if (empty($to)) {
+            throw ValidationException::withMessages(['to' => 'Debes indicar al menos un destinatario.']);
+        }
+
+        $paper = $data['paper'] ?? 'letter';
+        $body  = $data['message'] ?? '';
+
+        // Envía en cola si hay queue configurada, si no envía en vivo
+        $mailable = (new PurchaseOrderMail($purchase, $body, $paper))
+            ->subject($data['subject'] ?? "Orden de compra {$purchase->code}");
+
+        $mailer = Mail::to($to);
+        if (!empty($cc))  $mailer->cc($cc);
+        if (!empty($bcc)) $mailer->bcc($bcc);
+
+        // Usa queue si está configurado
+        try {
+            if (config('queue.default') && config('queue.default') !== 'sync') {
+                $mailer->queue($mailable);
+            } else {
+                $mailer->send($mailable);
+            }
+        } catch (\Throwable $e) {
+            report($e);
+            return back()->with('error', 'No se pudo enviar el correo. Intenta nuevamente.');
+        }
+
+        return back()->with('success', 'Correo enviado correctamente.');
     }
 }

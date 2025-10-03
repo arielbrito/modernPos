@@ -221,7 +221,7 @@ export function ReceiveModal({
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
+                <Button variant="outline" size="sm" className="gap-2 pos-hover">
                     <Check className="h-4 w-4" />
                     Recibir
                 </Button>
@@ -258,7 +258,7 @@ export function ReceiveModal({
                             size="sm"
                             onClick={clearAll}
                             disabled={processing}
-                            className="gap-2"
+                            className="gap-2 pos-button-primary"
                         >
                             <RotateCcw className="h-4 w-4" />
                             Limpiar
@@ -276,7 +276,7 @@ export function ReceiveModal({
                 <Separator />
 
                 {/* Tabla */}
-                <div className="rounded-md border">
+                <div className="rounded-md border scrollbar-stoneretail overflow-x-auto">
                     <Table>
                         <TableHeader className="sticky top-0 bg-background">
                             <TableRow>
@@ -300,7 +300,7 @@ export function ReceiveModal({
                                         </TableCell>
                                         <TableCell className="text-center">{it.pending}</TableCell>
                                         <TableCell>
-                                            <div className="relative flex items-center">
+                                            <div className="relative flex items-center pos-focus">
                                                 <Input
                                                     ref={(el) => { inputsRef.current[idx] = el; }}
                                                     aria-label={`Cantidad recibida para ${it.name}`}
@@ -310,7 +310,7 @@ export function ReceiveModal({
                                                     step="0.01"
                                                     max={it.pending}
                                                     className={cn(
-                                                        "w-full text-right pr-9",
+                                                        "w-full text-right pr-9 pos-input",
                                                         invalid && "border-red-500 focus-visible:ring-red-500"
                                                     )}
                                                     value={raw ?? ""}

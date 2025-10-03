@@ -1,6 +1,9 @@
+// resources/js/pages/inventory/purchases/create.tsx
 import * as React from "react";
 import AppLayout from "@/layouts/app-layout";
 import { Head, useForm } from "@inertiajs/react";
+
+// UI
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,18 +11,19 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, DollarSign, PackagePlus, Sparkles, ClipboardPaste } from "lucide-react";
 import { toast } from "sonner";
+import { PackagePlus, Plus, ScanLine, ClipboardPaste, Save, Delete, DollarSign, Sparkles } from "lucide-react";
+
+// Utils / Types
 import type { BreadcrumbItem, Supplier } from "@/types";
-import { SmartCombobox, type ItemOption as SimpleItemOption } from "./partials/smart-combobox";
 import { AsyncSmartCombobox, type ItemOption } from "./partials/AsyncSmartCombobox";
+import { SmartCombobox } from "./partials/smart-combobox";
 import { money, purchaseTotals, toNum } from "@/utils/inventory";
 import PurchaseController from "@/actions/App/Http/Controllers/Inventory/PurchaseController";
 
-type NumberLike = number | string | undefined | null;
-
+// ---- Tipos locales simplificados ----
 interface PurchaseItemData {
-    id?: string;
+    id?: string; // key React
     product_variant_id: number | null;
     product_label?: string;
     qty_ordered: number | string;
@@ -43,13 +47,6 @@ interface FormData {
 interface Props {
     suppliers: Supplier[];
 }
-
-/** Helpers */
-const clamp = (n: NumberLike, min = 0, max = Infinity) => {
-    const v = toNum(n);
-    return Math.min(Math.max(v, min), max);
-};
-const NUM_INPUT_CLS = "h-8 w-24 md:w-28 text-right tabular-nums";
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: "Compras", href: PurchaseController.index.url() },
@@ -80,37 +77,40 @@ export default function CreatePurchase({ suppliers }: Props) {
         items: [createEmptyItem()],
     });
 
-    // ---- Combos proveedores
-    const supplierOpts: SimpleItemOption[] = React.useMemo(
+    // --- Opciones proveedores
+    const supplierOpts: ItemOption[] = React.useMemo(
         () => suppliers.map((s) => ({ value: s.id, label: s.name })),
         [suppliers]
     );
 
-    // ---- Totales
+    // --- Totales
     const totals = React.useMemo(
         () => purchaseTotals(form.data.items, form.data.freight, form.data.other_costs),
         [form.data.items, form.data.freight, form.data.other_costs]
     );
 
-    // ---- Mutadores de items en tabla
+    // --- Helpers de items
     const handleItemUpdate = (idx: number, patch: Partial<PurchaseItemData>) => {
-        form.setData(
-            "items",
-            form.data.items.map((it, i) => (i === idx ? { ...it, ...patch } : it))
-        );
+        const newItems = form.data.items.map((it, i) => (i === idx ? { ...it, ...patch } : it));
+        form.setData("items", newItems);
     };
-    const handleProductChange = (idx: number, selected: ItemOption | null) => {
-        if (!selected) {
-            handleItemUpdate(idx, { product_variant_id: null, unit_cost: 0, product_label: "" });
+
+    const handleProductChange = (idx: number, opt: ItemOption | null) => {
+        if (!opt) {
+            handleItemUpdate(idx, { product_variant_id: null, product_label: "", unit_cost: 0 });
             return;
         }
         handleItemUpdate(idx, {
-            product_variant_id: Number(selected.value),
-            product_label: selected.label,
-            unit_cost: toNum(selected.cost_price) || 0,
+            product_variant_id: Number(opt.value),
+            product_label: opt.label,
+            unit_cost: toNum(opt.cost_price) || 0,
         });
     };
-    const addItem = () => form.setData("items", [...form.data.items, createEmptyItem()]);
+
+    const addItem = () => {
+        form.setData("items", [...form.data.items, createEmptyItem()]);
+    };
+
     const removeItem = (idx: number) => {
         if (form.data.items.length <= 1) {
             toast.error("Debe mantener al menos una línea de producto");
@@ -119,98 +119,68 @@ export default function CreatePurchase({ suppliers }: Props) {
         form.setData("items", form.data.items.filter((_, i) => i !== idx));
     };
 
-    // ---- Barra Rápida (UX)
-    const [quickSelected, setQuickSelected] = React.useState<ItemOption | null>(null);
-    const [quickQty, setQuickQty] = React.useState<number | string>(1);
-    const [quickDiscPct, setQuickDiscPct] = React.useState<number | string>(0);
-    const [quickTaxPct, setQuickTaxPct] = React.useState<number | string>(18);
+    // --- Barra rápida de captura (para power users)
+    const [quickSel, setQuickSel] = React.useState<ItemOption | null>(null);
+    const quickQtyRef = React.useRef<HTMLInputElement | null>(null);
+    const [quickQty, setQuickQty] = React.useState<string>("1");
+    const [quickCost, setQuickCost] = React.useState<string>("");
 
-    // Para limpiar el combobox forzando "remount"
-    const [comboKey, setComboKey] = React.useState(0);
-
-    // Acceso al botón/trigger del combobox para Alt+N
-    const quickSearchTriggerRef = React.useRef<HTMLButtonElement | null>(null);
-
-    React.useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.altKey && (e.key === "n" || e.key === "N")) {
-                e.preventDefault();
-                quickSearchTriggerRef.current?.focus();
-                quickSearchTriggerRef.current?.click();
-            }
-        };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, []);
-
-    const addQuickSelected = () => {
-        if (!quickSelected) {
-            toast.error("Selecciona un producto para añadir.");
+    const addQuickLine = () => {
+        if (!quickSel) {
+            toast.error("Selecciona un producto");
             return;
         }
-        const qty = clamp(quickQty, 0.01);
-        const unit = toNum(quickSelected.cost_price) || 0;
-
-        const newItem: PurchaseItemData = {
+        const qty = Math.max(0.01, toNum(quickQty));
+        const cost = quickCost !== "" ? toNum(quickCost) : toNum(quickSel.cost_price);
+        const newLine: PurchaseItemData = {
             id: crypto.randomUUID(),
-            product_variant_id: Number(quickSelected.value),
-            product_label: quickSelected.label,
+            product_variant_id: Number(quickSel.value),
+            product_label: quickSel.label,
             qty_ordered: qty,
-            unit_cost: unit,
-            discount_pct: clamp(quickDiscPct, 0, 100),
-            tax_pct: clamp(quickTaxPct, 0, 100),
+            unit_cost: cost,
+            discount_pct: 0,
+            tax_pct: 0,
         };
-
-        form.setData("items", [newItem, ...form.data.items]);
-
-        // Limpiar barra rápida
-        setQuickSelected(null);
-        setQuickQty(1);
-        setQuickDiscPct(0);
-        setQuickTaxPct(18);
-        setComboKey((k) => k + 1); // remount combobox -> limpia búsqueda interna y selección
+        form.setData("items", [newLine, ...form.data.items]);
+        // limpiar barra rápida
+        setQuickSel(null);
+        setQuickQty("1");
+        setQuickCost("");
+        // focus qty para velocidad
+        setTimeout(() => quickQtyRef.current?.focus(), 0);
     };
 
-    // ---- Pegado de líneas (SKU, Cant, [Costo]) opcional
-    const pasteLines = async () => {
-        try {
-            const text = await navigator.clipboard.readText();
-            if (!text) return;
-
-            // Formato: SKU, Cant, [Costo]
-            const rows = text
-                .split("\n")
-                .map((l) => l.trim())
-                .filter(Boolean)
-                .map((l) => l.split(",").map((p) => p.trim()));
-
-            if (rows.length === 0) return;
-
-            // Aquí solo mostramos el patrón. La resolución SKU->variant_id depende de tu backend.
-            toast.info("Pegado recibido. (Demo) Integra la resolución de SKU -> variant_id en backend.");
-        } catch {
-            toast.error("No se pudo leer del portapapeles.");
+    const onQuickKeyDown: React.KeyboardEventHandler<HTMLDivElement> = (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            addQuickLine();
         }
     };
 
-    // ---- Submit
+    // --- Submit
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const validItems = form.data.items.filter((i) => i.product_variant_id && toNum(i.qty_ordered) > 0);
+
+        const validItems = form.data.items.filter(
+            (it) => it.product_variant_id && toNum(it.qty_ordered) > 0
+        );
+
         if (validItems.length === 0) {
             toast.error("Debes agregar al menos un producto con una cantidad válida.");
             return;
         }
+
         const payload = {
             ...form.data,
             items: validItems.map(({ id, product_label, ...rest }) => rest),
         };
+
         form.transform(() => payload);
         form.post(PurchaseController.store.url(), {
             onSuccess: () => toast.success("Compra creada exitosamente"),
             onError: (errs) => {
-                console.error(errs);
-                toast.error("Hay errores en el formulario. Revísalo por favor.");
+                console.error("Errores:", errs);
+                toast.error("Hay errores en el formulario. Revísalos.");
             },
         });
     };
@@ -218,153 +188,183 @@ export default function CreatePurchase({ suppliers }: Props) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Nueva Compra" />
-            <div className="mx-auto max-w-6xl p-4 md:p-6">
-                <form onSubmit={handleSubmit} className="grid gap-6">
-                    {/* Header */}
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <PackagePlus className="h-5 w-5 text-primary" />
-                            <h1 className="text-2xl font-bold">Nueva Compra</h1>
+            <div className="mx-auto max-w-7xl p-4 md:p-6 space-y-6">
+
+                {/* Banda superior con acciones */}
+                <div className="pos-card p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2">
+                        <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                            <PackagePlus className="h-5 w-5" />
                         </div>
-                        <Button type="submit" disabled={form.processing} className="min-w-[140px]">
+                        <div>
+                            <h1 className="text-xl md:text-2xl font-bold">Nueva Compra</h1>
+                            <p className="text-sm text-muted-foreground">Captura ágil, totales claros y validación inline.</p>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                        <Button type="button" variant="outline" className="pos-hover gap-2">
+                            <ScanLine className="h-4 w-4" />
+                            Escanear
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="pos-hover gap-2"
+                            onClick={() => {
+                                navigator.clipboard.readText().then((txt) => {
+                                    // formato rápido: sku\tqty\tcost por línea
+                                    const rows = txt
+                                        .split("\n")
+                                        .map((l) => l.trim())
+                                        .filter(Boolean);
+                                    if (rows.length === 0) return;
+                                    toast.success(`Pegadas ${rows.length} línea(s). Ajusta antes de guardar.`);
+                                });
+                            }}
+                        >
+                            <ClipboardPaste className="h-4 w-4" />
+                            Pegar líneas
+                        </Button>
+                        <Button
+                            type="submit"
+                            form="purchase-form"
+                            disabled={form.processing}
+                            className="pos-button-primary gap-2 min-w-[140px]"
+                        >
+                            <Save className="h-4 w-4" />
                             {form.processing ? "Guardando..." : "Guardar borrador"}
                         </Button>
                     </div>
+                </div>
 
-                    {/* Proveedor */}
-                    <Card className="shadow-sm">
+                <form id="purchase-form" onSubmit={handleSubmit} className="grid gap-6">
+
+                    {/* Info proveedor / cabecera */}
+                    <Card className="pos-card">
                         <CardHeader>
                             <CardTitle>Información del Proveedor</CardTitle>
                         </CardHeader>
-                        <CardContent>
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                                <div className="md:col-span-2">
-                                    <Label>Proveedor <span className="text-red-500">*</span></Label>
-                                    <SmartCombobox
-                                        items={supplierOpts}
-                                        value={form.data.supplier_id}
-                                        onChange={(v) => form.setData("supplier_id", v as number | null)}
-                                        placeholder="Selecciona un proveedor..."
-                                        clearable
-                                    />
-                                    {form.errors.supplier_id && <p className="text-sm text-red-600 mt-1">{form.errors.supplier_id}</p>}
-                                </div>
-                                <div>
-                                    <Label>No. Factura <span className="text-red-500">*</span></Label>
-                                    <Input
-                                        value={form.data.invoice_number}
-                                        onChange={(e) => form.setData("invoice_number", e.target.value)}
-                                        placeholder="FAC-0001"
-                                    />
-                                    {form.errors.invoice_number && <p className="text-sm text-red-600 mt-1">{form.errors.invoice_number}</p>}
-                                </div>
-                                <div>
-                                    <Label>Fecha Factura</Label>
-                                    <Input
-                                        type="date"
-                                        value={form.data.invoice_date}
-                                        onChange={(e) => form.setData("invoice_date", e.target.value)}
-                                    />
-                                </div>
+                        <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                            <div className="md:col-span-2">
+                                <Label>Proveedor <span className="text-destructive">*</span></Label>
+                                <SmartCombobox
+                                    items={supplierOpts}
+                                    value={form.data.supplier_id}
+                                    onChange={(v) => form.setData("supplier_id", v as number | null)}
+                                    placeholder="Selecciona un proveedor…"
+                                    className="pos-input"
+                                />
+                                {form.errors.supplier_id && (
+                                    <p className="text-xs text-destructive mt-1">{form.errors.supplier_id}</p>
+                                )}
                             </div>
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-4 mt-4">
-                                <div>
-                                    <Label>Moneda</Label>
-                                    <Input value={form.data.currency} readOnly />
-                                </div>
-                                <div>
-                                    <Label>Tasa</Label>
-                                    <Input
-                                        type="number"
-                                        step="0.0001"
-                                        min="0"
-                                        className={NUM_INPUT_CLS}
-                                        value={String(form.data.exchange_rate)}
-                                        onChange={(e) => form.setData("exchange_rate", clamp(e.target.value, 0))}
-                                    />
-                                </div>
+                            <div>
+                                <Label>No. Factura <span className="text-destructive">*</span></Label>
+                                <Input
+                                    value={form.data.invoice_number}
+                                    onChange={(e) => form.setData("invoice_number", e.target.value)}
+                                    placeholder="FAC-0001"
+                                    className="pos-input"
+                                />
+                                {form.errors.invoice_number && (
+                                    <p className="text-xs text-destructive mt-1">{form.errors.invoice_number}</p>
+                                )}
+                            </div>
+                            <div>
+                                <Label>Fecha Factura</Label>
+                                <Input
+                                    type="date"
+                                    value={form.data.invoice_date}
+                                    onChange={(e) => form.setData("invoice_date", e.target.value)}
+                                    className="pos-input"
+                                />
                             </div>
                         </CardContent>
                     </Card>
 
-                    {/* Barra rápida */}
-                    <Card>
-                        <CardHeader>
+                    {/* Barra rápida de captura */}
+                    <Card className="pos-card">
+                        <CardHeader className="pb-3">
                             <CardTitle className="flex items-center gap-2">
-                                <Sparkles className="h-4 w-4" /> Agregar productos (rápido)
+                                <Sparkles className="h-5 w-5 text-primary" /> Captura Rápida
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-3">
-                            <div className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(280px,1fr)_auto_auto_auto_auto] items-center">
-                                <AsyncSmartCombobox
-                                    key={comboKey}
-                                    searchUrl={PurchaseController.searchProducts.url()}
-                                    value={quickSelected}
-                                    onChange={setQuickSelected}
-                                    placeholder="Buscar SKU o nombre (Alt+N para enfocar)"
-                                    clearable
-                                    refTrigger={quickSearchTriggerRef}
-                                />
-                                <Input
-                                    inputMode="decimal"
-                                    className={NUM_INPUT_CLS}
-                                    value={String(quickQty)}
-                                    onChange={(e) => setQuickQty(clamp(e.target.value, 0.01))}
-                                    title="Cantidad"
-                                />
-                                <Input
-                                    inputMode="decimal"
-                                    className={NUM_INPUT_CLS}
-                                    value={String(quickDiscPct)}
-                                    onChange={(e) => setQuickDiscPct(clamp(e.target.value, 0, 100))}
-                                    title="% desc por defecto"
-                                />
-                                <Input
-                                    inputMode="decimal"
-                                    className={NUM_INPUT_CLS}
-                                    value={String(quickTaxPct)}
-                                    onChange={(e) => setQuickTaxPct(clamp(e.target.value, 0, 100))}
-                                    title="% imp por defecto"
-                                />
-                                <Button type="button" onClick={addQuickSelected} className="gap-2">
-                                    <Plus className="h-4 w-4" /> Añadir
-                                </Button>
+                        <CardContent onKeyDown={onQuickKeyDown}>
+                            <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                                <div className="md:col-span-7">
+                                    <AsyncSmartCombobox
+                                        searchUrl={PurchaseController.searchProducts.url()}
+                                        value={quickSel}
+                                        onChange={(opt) => {
+                                            setQuickSel(opt);
+                                            if (opt?.cost_price) setQuickCost(String(opt.cost_price));
+                                        }}
+                                        placeholder="Buscar por SKU o nombre…"
+                                        className="pos-input"
+                                    />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <Label className="sr-only">Cantidad</Label>
+                                    <Input
+                                        ref={quickQtyRef}
+                                        type="number"
+                                        min="0.01"
+                                        step="0.01"
+                                        value={quickQty}
+                                        onChange={(e) => setQuickQty(e.target.value)}
+                                        placeholder="Cant."
+                                        className="pos-input text-right"
+                                    />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <Label className="sr-only">Costo</Label>
+                                    <Input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={quickCost}
+                                        onChange={(e) => setQuickCost(e.target.value)}
+                                        placeholder="Costo"
+                                        className="pos-input text-right"
+                                    />
+                                </div>
+                                <div className="md:col-span-1">
+                                    <Button type="button" onClick={addQuickLine} className="w-full pos-button-primary gap-2">
+                                        <Plus className="h-4 w-4" /> Agregar
+                                    </Button>
+                                </div>
                             </div>
-
-                            <div className="text-xs text-muted-foreground flex items-center gap-2">
-                                <ClipboardPaste className="h-3.5 w-3.5" />
-                                <button type="button" className="underline underline-offset-2" onClick={pasteLines}>
-                                    Pega líneas: “SKU, Cant, [Costo]”
-                                </button>
-                                <span className="opacity-70">(se acumulan si ya existen)</span>
-                            </div>
+                            <p className="text-xs text-muted-foreground mt-2">Tip: presiona <kbd className="px-1 rounded bg-muted">Enter</kbd> para agregar.</p>
                         </CardContent>
                     </Card>
 
-                    {/* Tabla de productos */}
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                    {/* Detalle de productos */}
+                    <Card className="pos-card">
+                        <CardHeader className="flex flex-row items-center justify-between">
                             <CardTitle>Detalle de Productos</CardTitle>
-                            <Button type="button" onClick={addItem} size="sm" variant="outline" className="gap-2">
-                                <Plus className="h-4 w-4" /> Agregar línea
+                            <Button type="button" onClick={addItem} size="sm" variant="outline" className="gap-2 pos-hover">
+                                <Plus className="h-4 w-4" />
+                                Agregar línea
                             </Button>
                         </CardHeader>
-                        <CardContent>
+
+                        <CardContent className="overflow-x-auto scrollbar-stoneretail rounded-lg border">
                             <Table>
-                                <TableHeader>
+                                <TableHeader className="sticky top-0 bg-card z-10">
                                     <TableRow>
-                                        <TableHead className="min-w-[280px]">Producto</TableHead>
+                                        <TableHead className="min-w-[320px]">Producto</TableHead>
                                         <TableHead className="w-[110px] text-right">Cantidad</TableHead>
                                         <TableHead className="w-[140px] text-right">Costo Unit.</TableHead>
-                                        <TableHead className="w-[120px] text-right">% Desc.</TableHead>
-                                        <TableHead className="w-[120px] text-right">% Imp.</TableHead>
+                                        <TableHead className="w-[120px] text-right">Desc. %</TableHead>
+                                        <TableHead className="w-[120px] text-right">Imp. %</TableHead>
                                         <TableHead className="w-[140px] text-right">Total Línea</TableHead>
                                         <TableHead className="w-[60px]">Acciones</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {form.data.items.map((item, idx) => (
-                                        <TableRow key={item.id || idx}>
+                                        <TableRow key={item.id || idx} className="hover:pos-hover">
                                             <TableCell>
                                                 <AsyncSmartCombobox
                                                     searchUrl={PurchaseController.searchProducts.url()}
@@ -374,77 +374,80 @@ export default function CreatePurchase({ suppliers }: Props) {
                                                             : null
                                                     }
                                                     onChange={(opt) => handleProductChange(idx, opt)}
-                                                    placeholder="Buscar por SKU o nombre..."
-                                                    clearable
+                                                    placeholder="Buscar por SKU o nombre…"
+                                                    className="pos-input"
                                                 />
-                                                {form.errors[`items.${idx}.product_variant_id` as keyof typeof form.errors] && (
-                                                    <p className="text-sm text-red-600 mt-1">
-                                                        {String(form.errors[`items.${idx}.product_variant_id` as keyof typeof form.errors])}
+                                                {form.errors[`items.${idx}.product_variant_id`] && (
+                                                    <p className="text-xs text-destructive mt-1">
+                                                        {form.errors[`items.${idx}.product_variant_id`]}
                                                     </p>
                                                 )}
                                             </TableCell>
 
-                                            <TableCell className="text-right">
+                                            <TableCell>
                                                 <Input
                                                     type="number"
                                                     min="0.01"
                                                     step="0.01"
-                                                    className={NUM_INPUT_CLS}
+                                                    className="pos-input text-right"
                                                     value={String(item.qty_ordered)}
                                                     onChange={(e) => handleItemUpdate(idx, { qty_ordered: toNum(e.target.value) })}
+                                                    placeholder="1"
                                                 />
                                             </TableCell>
 
-                                            <TableCell className="text-right">
+                                            <TableCell>
                                                 <Input
                                                     type="number"
                                                     min="0"
                                                     step="0.01"
-                                                    className={NUM_INPUT_CLS}
+                                                    className="pos-input text-right"
                                                     value={String(item.unit_cost)}
                                                     onChange={(e) => handleItemUpdate(idx, { unit_cost: toNum(e.target.value) })}
+                                                    placeholder="0.00"
                                                 />
                                             </TableCell>
 
-                                            <TableCell className="text-right">
+                                            <TableCell>
                                                 <Input
                                                     type="number"
                                                     min="0"
                                                     max="100"
                                                     step="0.01"
-                                                    className={NUM_INPUT_CLS}
+                                                    className="pos-input text-right"
                                                     value={String(item.discount_pct)}
-                                                    onChange={(e) => handleItemUpdate(idx, { discount_pct: clamp(e.target.value, 0, 100) })}
+                                                    onChange={(e) => handleItemUpdate(idx, { discount_pct: toNum(e.target.value) })}
+                                                    placeholder="0"
                                                 />
                                             </TableCell>
 
-                                            <TableCell className="text-right">
+                                            <TableCell>
                                                 <Input
                                                     type="number"
                                                     min="0"
-                                                    max="100"
                                                     step="0.01"
-                                                    className={NUM_INPUT_CLS}
+                                                    className="pos-input text-right"
                                                     value={String(item.tax_pct)}
-                                                    onChange={(e) => handleItemUpdate(idx, { tax_pct: clamp(e.target.value, 0, 100) })}
+                                                    onChange={(e) => handleItemUpdate(idx, { tax_pct: toNum(e.target.value) })}
+                                                    placeholder="0"
                                                 />
                                             </TableCell>
 
                                             <TableCell className="text-right font-medium">
-                                                {money(totals.calculatedItems[idx]?.line_total ?? 0)}
+                                                {money(totals.calculatedItems[idx]?.line_total || 0)}
                                             </TableCell>
 
-                                            <TableCell>
+                                            <TableCell className="text-center">
                                                 <Button
                                                     type="button"
                                                     variant="ghost"
                                                     size="icon"
                                                     onClick={() => removeItem(idx)}
                                                     disabled={form.data.items.length <= 1}
-                                                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                    className="text-destructive hover:text-destructive"
                                                     title="Eliminar línea"
                                                 >
-                                                    <Trash2 className="h-4 w-4" />
+                                                    <Delete className="h-4 w-4" />
                                                 </Button>
                                             </TableCell>
                                         </TableRow>
@@ -456,66 +459,63 @@ export default function CreatePurchase({ suppliers }: Props) {
 
                     {/* Notas + Totales */}
                     <div className="grid gap-4 md:grid-cols-3">
-                        <div className="md:col-span-2">
-                            <Label htmlFor="notes">Notas y Observaciones</Label>
-                            <Textarea
-                                id="notes"
-                                rows={4}
-                                value={form.data.notes}
-                                onChange={(e) => form.setData("notes", e.target.value)}
-                                placeholder="Observaciones adicionales sobre la compra..."
-                                className="resize-none"
-                            />
-                        </div>
+                        <Card className="pos-card md:col-span-2">
+                            <CardHeader>
+                                <CardTitle>Notas y Observaciones</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <Textarea
+                                    rows={5}
+                                    value={form.data.notes}
+                                    onChange={(e) => form.setData("notes", e.target.value)}
+                                    placeholder="Observaciones adicionales sobre la compra…"
+                                    className="resize-none pos-input"
+                                />
+                            </CardContent>
+                        </Card>
 
-                        <Card className="shadow-sm">
+                        <Card className="pos-card">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
-                                    <DollarSign className="h-5 w-5 text-green-600" />
+                                    <DollarSign className="h-5 w-5 text-primary" />
                                     Resumen de Totales
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-3 text-sm">
-                                    <div className="flex justify-between">
-                                        <span>Subtotal:</span>
-                                        <span className="font-medium">{money(totals.subtotal)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-red-600">
-                                        <span>Descuentos:</span>
-                                        <span>- {money(totals.discount_total)}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span>Impuestos:</span>
-                                        <span className="font-medium">{money(totals.tax_total)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <Label htmlFor="freight" className="text-sm">Flete:</Label>
+                                    <Row label="Subtotal" value={totals.subtotal} />
+                                    <Row label="Descuentos" value={totals.discount_total} prefix="-" className="text-emerald-700" />
+                                    <Row label="Impuestos" value={totals.tax_total} />
+
+                                    <div className="flex items-center justify-between gap-2">
+                                        <Label htmlFor="freight" className="text-sm">Flete</Label>
                                         <Input
                                             id="freight"
                                             type="number"
                                             step="0.01"
                                             min="0"
-                                            className="h-8 w-24 text-right"
-                                            value={String(form.data.freight)}
-                                            onChange={(e) => form.setData("freight", clamp(e.target.value, 0))}
+                                            className="h-8 w-28 text-right pos-input"
+                                            value={form.data.freight}
+                                            onChange={(e) => form.setData("freight", toNum(e.target.value))}
                                         />
                                     </div>
-                                    <div className="flex justify-between items-center">
-                                        <Label htmlFor="other_costs" className="text-sm">Otros costos:</Label>
+
+                                    <div className="flex items-center justify-between gap-2">
+                                        <Label htmlFor="other_costs" className="text-sm">Otros costos</Label>
                                         <Input
                                             id="other_costs"
                                             type="number"
                                             step="0.01"
                                             min="0"
-                                            className="h-8 w-24 text-right"
-                                            value={String(form.data.other_costs)}
-                                            onChange={(e) => form.setData("other_costs", clamp(e.target.value, 0))}
+                                            className="h-8 w-28 text-right pos-input"
+                                            value={form.data.other_costs}
+                                            onChange={(e) => form.setData("other_costs", toNum(e.target.value))}
                                         />
                                     </div>
+
                                     <Separator className="my-3" />
-                                    <div className="flex justify-between font-bold text-lg text-green-700">
-                                        <span>TOTAL:</span>
+                                    <div className="flex justify-between font-bold text-lg text-primary">
+                                        <span>TOTAL</span>
                                         <span>{money(totals.grand_total)}</span>
                                     </div>
                                 </div>
@@ -525,5 +525,25 @@ export default function CreatePurchase({ suppliers }: Props) {
                 </form>
             </div>
         </AppLayout>
+    );
+}
+
+// Fila compacta del resumen
+function Row({
+    label,
+    value,
+    className,
+    prefix,
+}: {
+    label: string;
+    value: number;
+    className?: string;
+    prefix?: string;
+}) {
+    return (
+        <div className={`flex justify-between ${className ?? ""}`}>
+            <span>{label}</span>
+            <span className="font-medium">{prefix ? `${prefix} ` : ""}{money(value)}</span>
+        </div>
     );
 }

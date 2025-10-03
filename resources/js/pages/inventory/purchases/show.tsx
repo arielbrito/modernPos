@@ -29,6 +29,9 @@ import { ArrowLeft, CheckCircle, Pencil, XCircle, Undo2 } from "lucide-react";
 import type { Purchase } from "@/types";
 import { money, toNum } from "@/utils/inventory";
 import PurchaseController from "@/actions/App/Http/Controllers/Inventory/PurchaseController";
+import { PrintControls } from "./partials/show/PrintControls";
+import { ExportButtons } from "./partials/show/ExportButtons";
+import { EmailPurchaseModal } from "./partials/show/email-purchase-modal";
 
 /* ---------- Reusables ---------- */
 function Kpi({
@@ -79,8 +82,8 @@ function StickyActionBar({
 
     return (
         <div className="sticky top-0 z-30 hidden md:block bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
-            <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-4">
+            <div className="mx-auto max-w-7xl px-1 py-2 flex  items-center justify-between">
+                <div className="flex items-center gap-4 mr-2">
                     <Link
                         href={PurchaseController.index.url()}
                         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -94,7 +97,7 @@ function StickyActionBar({
                     </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2  ">
                     {permissions.canBeApproved && (
                         <Button className="gap-2" onClick={onApprove}>
                             <CheckCircle className="h-4 w-4" /> Aprobar
@@ -123,7 +126,11 @@ function StickyActionBar({
                             Cancelar
                         </Button>
                     )}
+
                 </div>
+
+
+
             </div>
         </div>
     );
@@ -213,6 +220,7 @@ export default function ShowPurchase({ purchase, can }: Props) {
                 onCancel={actions.cancel}
             />
 
+
             {/* Mobile actions fixed bottom */}
             <MobileActions
                 purchase={purchase}
@@ -222,9 +230,17 @@ export default function ShowPurchase({ purchase, can }: Props) {
                 onCancel={actions.cancel}
             />
 
+
             <div className="mx-auto max-w-7xl p-4 md:p-6 space-y-6 pb-20 md:pb-6">
                 {/* HERO / Timeline */}
-                <PurchaseHeader status={purchase.status} />
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <PurchaseHeader status={purchase.status} />
+                    <div className="flex flex-wrap gap-2">
+                        <PrintControls purchaseId={purchase.id} />
+                        <ExportButtons purchaseId={purchase.id} />
+                        <EmailPurchaseModal purchase={purchase} />
+                    </div>
+                </div>
 
                 {/* KPIs: 1 col (xs), 2 col (sm/md), 4 col (lg+) */}
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

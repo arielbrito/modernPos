@@ -139,7 +139,7 @@ export function ReturnModal({ purchase }: Props) {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
+                <Button variant="ghost" size="sm" className="gap-2 pos-button-secondary ">
                     <Undo2 className="h-4 w-4" /> Registrar Devolución
                 </Button>
             </DialogTrigger>
@@ -176,7 +176,7 @@ export function ReturnModal({ purchase }: Props) {
                         </div>
                     </div>
 
-                    <Table>
+                    <Table className="overflow-x-auto scrollbar-stoneretail rounded-lg border">
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Producto</TableHead>

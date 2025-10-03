@@ -55,9 +55,9 @@ export function PurchaseAlerts({
             )}
 
             {hasPendingItems && (
-                <Alert className="border-blue-300 bg-blue-50 text-blue-900">
+                <Alert className="bg-amber-50 text-amber-700 border border-amber-200 rounded-md px-2 py-1 text-xs font-medium">
                     <PackageCheck className="h-4 w-4" />
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between ">
                         <div>
                             <AlertTitle>Productos pendientes de recepción</AlertTitle>
                             <AlertDescription>

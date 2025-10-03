@@ -19,7 +19,7 @@ export function SearchFilter({ filters, onFilterChange, onClearFilters }: Props)
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4 w-full">
                 {/* Input de búsqueda */}
-                <div className="relative w-full max-w-sm" role="search">
+                <div className="relative w-full max-w-sm pos-focus" role="search">
                     <Search
                         className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none"
                         aria-hidden="true"
@@ -33,7 +33,7 @@ export function SearchFilter({ filters, onFilterChange, onClearFilters }: Props)
                             if (e.key === "Escape") clearSearch();
                         }}
                         autoComplete="off"
-                        className="pl-8 pr-8"
+                        className="pl-8 pr-8 pos-input"
                     />
                     {filters.search ? (
                         <button
@@ -54,7 +54,7 @@ export function SearchFilter({ filters, onFilterChange, onClearFilters }: Props)
                     onValueChange={(v) => onFilterChange("status", v)}
                 >
                     <SelectTrigger
-                        className="w-full sm:w-48"
+                        className="w-full sm:w-48 pos-input"
                         aria-label="Filtrar por estado"
                     >
                         <div className="flex items-center gap-2">

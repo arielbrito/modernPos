@@ -1,11 +1,11 @@
 import * as React from "react";
 import { Head, Link } from "@inertiajs/react";
 
-// --- HOOKS ---
+// HOOKS
 import { usePurchaseFilters } from "./hooks/usePurchaseFilters";
 import { usePurchaseActions } from "./hooks/usePurchaseActions";
 
-// --- LAYOUT, COMPONENTS & PARTIALS ---
+// LAYOUT + PARTIALS
 import AppLayout from "@/layouts/app-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,123 +16,90 @@ import { SearchFilter } from "./partials/SearchFilter";
 import { PurchaseRow } from "./partials/PurchaseRow";
 import { MobilePurchaseCard } from "./partials/MobilePurchaseCard";
 import { EmptyState } from "./partials/EmptyState";
-import { Package, DollarSign, AlertTriangle } from "lucide-react";
+import { Package, DollarSign, AlertTriangle, Download, FileSpreadsheet } from "lucide-react";
 
-// --- UTILS, TYPES & ACTIONS ---
+// TYPES & UTILS
 import type { BreadcrumbItem, Paginated, Purchase } from "@/types";
 import { money } from "@/utils/inventory";
 import PurchaseController from "@/actions/App/Http/Controllers/Inventory/PurchaseController";
+import { withQuery } from "@/lib/withQuery";
 
 interface Props {
-    // Mantengo tu nombre 'compras' para no romper nada,
-    // pero normalizo números dentro del componente.
-    compras: Paginated<
-        Purchase & {
-            returns_total: number | null;
-            true_balance?: number; // puede no venir del backend aún
-        }
-    >;
-    filters: { search?: string; status?: string };
+    compras: Paginated<Purchase & { returns_total: number | null; true_balance: number }>;
+    filters: { search: string; status: string };
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: "Compras", href: PurchaseController.index.url() }];
 
 export default function IndexPurchases({ compras, filters: initialFilters }: Props) {
-    // 1) Hooks de filtros/acciones
     const { filters, handleFilterChange, clearFilters } = usePurchaseFilters(initialFilters);
     const actions = usePurchaseActions();
 
-    // 2) Normalización de datos (evita NaN/undefined y soporta true_balance opcional)
-    const normalized = React.useMemo(() => {
-        return compras.data.map((p) => {
-            const grand_total = Number((p as any).grand_total ?? 0);
-            const balance_total = Number((p as any).balance_total ?? 0);
-            const returns_total = Number((p as any).returns_total ?? 0);
-
-            // Si viene true_balance del backend lo uso; si no, lo calculo.
-            const true_balance =
-                typeof (p as any).true_balance !== "undefined"
-                    ? Number((p as any).true_balance)
-                    : balance_total - returns_total;
-
-            return {
-                ...p,
-                grand_total: isFinite(grand_total) ? grand_total : 0,
-                balance_total: isFinite(balance_total) ? balance_total : 0,
-                returns_total: isFinite(returns_total) ? returns_total : 0,
-                true_balance: isFinite(true_balance) ? true_balance : 0,
-            };
-        });
+    const stats = React.useMemo(() => {
+        const totalBalance = compras.data.reduce((sum, p) => sum + p.true_balance, 0);
+        const draftCount = compras.data.filter((p) => p.status === "draft").length;
+        const totalPurchasedInPeriod = compras.data.reduce((sum, p) => sum + p.grand_total, 0);
+        return { totalBalance, draftCount, totalPurchasedInPeriod };
     }, [compras.data]);
 
-    // 3) KPIs seguros
-    const stats = React.useMemo(() => {
-        const totalBalance = normalized.reduce((sum, p) => sum + (p as any).true_balance, 0);
-        const draftCount = normalized.filter((p) => p.status === "draft").length;
-        const totalPurchasedInPeriod = normalized.reduce((sum, p) => sum + (p as any).grand_total, 0);
-        return { totalBalance, draftCount, totalPurchasedInPeriod };
-    }, [normalized]);
+    const csvUrl = withQuery(PurchaseController.exportIndexCsv.url(), { search: filters.search, status: filters.status });
+    const xlsxUrl = withQuery(PurchaseController.exportIndexXlsx.url(), { search: filters.search, status: filters.status });
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Compras" />
+
             <div className="mx-auto max-w-7xl p-4 md:p-6 space-y-6">
-                {/* --- ENCABEZADO MEJORADO --- */}
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                {/* Banda superior con branding */}
+                <div className="gradient-stoneretail rounded-lg border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                        <div className="rounded-lg bg-foreground/10 p-2 text-foreground">
                             <Package className="h-6 w-6" />
                         </div>
                         <div>
                             <h1 className="text-2xl font-bold">Gestión de Compras</h1>
                             <p className="text-sm text-muted-foreground">
-                                {typeof compras.total === "number" && compras.total > 0
-                                    ? `Mostrando ${compras.from}-${compras.to} de ${compras.total} registros`
-                                    : "Sin resultados"}
+                                {compras.total > 0 && `Mostrando ${compras.from}-${compras.to} de ${compras.total} registros`}
                             </p>
                         </div>
                     </div>
-                    <Button asChild>
-                        <Link href={PurchaseController.create.url()}>Nueva Compra</Link>
-                    </Button>
+
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-3"></div>
+                        <div className="flex items-center gap-2">
+                            <Button asChild><Link href={PurchaseController.create.url()}>Nueva Compra</Link></Button>
+                            {/* Botones de exportación */}
+                            <Button asChild variant="outline">
+                                <a href={csvUrl}><Download className="h-4 w-4 mr-2" />CSV</a>
+                            </Button>
+                            <Button asChild variant="outline">
+                                <a href={xlsxUrl}><FileSpreadsheet className="h-4 w-4 mr-2" />Excel</a>
+                            </Button>
+                        </div>
+                    </div>
+
                 </div>
 
-                {/* --- KPI CARDS --- */}
+                {/* KPIs */}
                 <div className="grid gap-4 md:grid-cols-3">
-                    <StatCard
-                        title="Total Comprado (Período)"
-                        value={money(stats.totalPurchasedInPeriod)}
-                        icon={<Package className="h-4 w-4 text-muted-foreground" />}
-                    />
-                    <StatCard
-                        title="Balance Pendiente Total"
-                        value={money(stats.totalBalance)}
-                        icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
-                    />
-                    <StatCard
-                        title="Compras en Borrador"
-                        value={String(stats.draftCount)}
-                        icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />}
-                    />
+                    <StatCard title="Total Comprado (Período)" value={money(stats.totalPurchasedInPeriod)} icon={<Package className="h-4 w-4 text-muted-foreground" />} />
+                    <StatCard title="Balance Pendiente Total" value={money(stats.totalBalance)} icon={<DollarSign className="h-4 w-4 text-muted-foreground" />} />
+                    <StatCard title="Compras en Borrador" value={String(stats.draftCount)} icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} />
                 </div>
 
-                <Card>
-                    <CardHeader>
-                        {/* --- FILTROS --- */}
-                        <SearchFilter
-                            filters={filters}
-                            onFilterChange={handleFilterChange}
-                            onClearFilters={clearFilters}
-                        />
+                {/* Lista / Tabla */}
+                <section className="pos-card">
+                    <CardHeader className="border-b">
+                        <CardTitle className="text-base">Listado</CardTitle>
+                        <SearchFilter filters={filters} onFilterChange={handleFilterChange} onClearFilters={clearFilters} />
                     </CardHeader>
 
                     <CardContent className="p-0">
-                        {normalized.length > 0 ? (
+                        {compras.data.length > 0 ? (
                             <>
-                                {/* --- VISTA DE TABLA (desktop) --- */}
-                                <div className="hidden lg:block">
+                                <div className="hidden lg:block overflow-x-auto scrollbar-stoneretail">
                                     <Table>
-                                        <TableHeader className="sticky top-0 bg-background z-10">
+                                        <TableHeader className="sticky top-0 bg-card z-10">
                                             <TableRow>
                                                 <TableHead className="w-[120px]">Código</TableHead>
                                                 <TableHead>Proveedor</TableHead>
@@ -145,17 +112,16 @@ export default function IndexPurchases({ compras, filters: initialFilters }: Pro
                                             </TableRow>
                                         </TableHeader>
                                         <tbody>
-                                            {normalized.map((p) => (
-                                                <PurchaseRow key={p.id} purchase={p as any} actions={actions} />
+                                            {compras.data.map((p) => (
+                                                <PurchaseRow key={p.id} purchase={p} actions={actions} />
                                             ))}
                                         </tbody>
                                     </Table>
                                 </div>
 
-                                {/* --- VISTA MÓVIL --- */}
                                 <div className="lg:hidden p-4 space-y-4">
-                                    {normalized.map((p) => (
-                                        <MobilePurchaseCard key={p.id} purchase={p as any} actions={actions} />
+                                    {compras.data.map((p) => (
+                                        <MobilePurchaseCard key={p.id} purchase={p} actions={actions} />
                                     ))}
                                 </div>
 
@@ -167,7 +133,7 @@ export default function IndexPurchases({ compras, filters: initialFilters }: Pro
                             <EmptyState />
                         )}
                     </CardContent>
-                </Card>
+                </section>
             </div>
         </AppLayout>
     );

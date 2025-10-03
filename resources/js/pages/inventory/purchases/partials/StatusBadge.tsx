@@ -23,11 +23,11 @@ const statusMap: Record<PurchaseStatus, { className: string; label: string }> = 
         label: "Recepción Parcial",
     },
     received: {
-        className: "bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-300",
+        className: "bg-primary/10 text-primary border border-primary/20 rounded-md px-2 py-1 text-xs font-medium",
         label: "Recibido",
     },
     cancelled: {
-        className: "bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-300",
+        className: "bg-red-50 text-red-700 border border-red-200 rounded-md px-2 py-1 text-xs font-medium",
         label: "Cancelado",
     },
 };

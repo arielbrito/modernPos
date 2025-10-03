@@ -61,6 +61,10 @@ Route::middleware(['auth'])->prefix('inventory')->name('inventory.')->group(func
             Route::post('/', 'store')->name('store');
             Route::get('/search-products', 'searchProducts')->name('searchProducts');
 
+            // (Opcional) Exportación del listado con filtros actuales
+            Route::get('/exportIndex/csv',  'exportIndexCsv')->name('exportIndex.csv');
+            Route::get('/exportIndex/xlsx', 'exportIndexXlsx')->name('exportIndex.xlsx');
+
             // Miembro
             Route::prefix('{purchase}')->group(function () {
                 Route::get('/', 'show')->name('show');
@@ -75,6 +79,14 @@ Route::middleware(['auth'])->prefix('inventory')->name('inventory.')->group(func
                 Route::post('/cancel', 'cancel')->name('cancel');
 
                 Route::get('/print', 'print')->name('print'); // <-- AÑADIDO
+
+                Route::post('/email', 'email')->name('email');
+                // Exportaciones por compra
+                Route::get('/export/csv',  'exportCsv')->name('export.csv');
+                Route::get('/export/xlsx', 'exportXlsx')->name('export.xlsx');
+
+
+
 
                 Route::post('/payments', 'storePayment')->name('payments.store');
 

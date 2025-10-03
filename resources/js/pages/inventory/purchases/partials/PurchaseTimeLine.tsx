@@ -87,7 +87,7 @@ export const PurchaseTimeline: React.FC<{ status: PurchaseStatus }> = ({ status 
                     : 0;
 
     return (
-        <div className="flex items-center" role="group" aria-label="Estado de la compra">
+        <div className="flex items-center " role="group" aria-label="Estado de la compra">
             {steps.map((step, i) => (
                 <TimelineStep
                     key={step.key}

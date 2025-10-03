@@ -32,9 +32,9 @@ export const StatCard = ({
     const displayValue = formatValue ? formatValue(value) : String(value);
 
     return (
-        <Card className={cn(className)}>
+        <Card className={cn(className, 'pos-card')}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{title}</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
                 <div className="shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full bg-muted">
                     {/* normalizamos el icono a 18px aprox */}
                     <div className="[&>svg]:h-4 [&>svg]:w-4 text-muted-foreground">{icon}</div>
