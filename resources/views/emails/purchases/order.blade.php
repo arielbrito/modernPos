@@ -1,17 +1,16 @@
-{{-- resources/views/emails/purchases/order.blade.php --}}
-<x-mail::message>
-    # Orden de compra {{ $purchase->code }}
+@component('mail::message')
+# Orden de compra {{ $purchase->code }}
 
-    {{ $bodyMessage }}
+{!! nl2br(e($bodyMessage ?? '')) !!}
 
-    <x-mail::panel>
-        **Proveedor:** {{ $purchase->supplier->name ?? '—' }}
-        **Factura:** {{ $purchase->invoice_number ?? '—' }}
-        **Fecha:** {{ $purchase->invoice_date?->format('d/m/Y') ?? '—' }}
-    </x-mail::panel>
+@component('mail::panel')
+**Proveedor:** {{ $purchase->supplier->name ?? '—' }}
+**Factura:** {{ $purchase->invoice_number ?? '—' }}
+**Fecha:** {{ optional($purchase->invoice_date)->format('d/m/Y') ?? '—' }}
+@endcomponent
 
-    Se adjunta el PDF de la orden.
+Se adjunta el PDF de la orden.
 
-    Gracias,
-    {{ config('app.name') }}
-</x-mail::message>
+Gracias,
+{{ config('app.name') }}
+@endcomponent

@@ -31,7 +31,9 @@ import { money, toNum } from "@/utils/inventory";
 import PurchaseController from "@/actions/App/Http/Controllers/Inventory/PurchaseController";
 import { PrintControls } from "./partials/show/PrintControls";
 import { ExportButtons } from "./partials/show/ExportButtons";
-import { EmailPurchaseModal } from "./partials/show/email-purchase-modal";
+// import { EmailPurchaseModal } from "./partials/show/email-purchase-modal";
+import { EmailSection } from "./partials/show/EmailSection";
+
 
 /* ---------- Reusables ---------- */
 function Kpi({
@@ -238,7 +240,7 @@ export default function ShowPurchase({ purchase, can }: Props) {
                     <div className="flex flex-wrap gap-2">
                         <PrintControls purchaseId={purchase.id} />
                         <ExportButtons purchaseId={purchase.id} />
-                        <EmailPurchaseModal purchase={purchase} />
+                        <EmailSection purchase={purchase} />
                     </div>
                 </div>
 

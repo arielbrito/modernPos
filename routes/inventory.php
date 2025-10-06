@@ -80,7 +80,7 @@ Route::middleware(['auth'])->prefix('inventory')->name('inventory.')->group(func
 
                 Route::get('/print', 'print')->name('print'); // <-- AÑADIDO
 
-                Route::post('/email', 'email')->name('email');
+                Route::post('/email', 'sendEmail')->name('email');
                 // Exportaciones por compra
                 Route::get('/export/csv',  'exportCsv')->name('export.csv');
                 Route::get('/export/xlsx', 'exportXlsx')->name('export.xlsx');

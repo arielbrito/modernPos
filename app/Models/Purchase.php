@@ -57,10 +57,15 @@ class Purchase extends Model
         return $this->hasMany(PurchasePayment::class);
     }
 
+    public function scopeReceived($q)
+    {
+        return $q->where('status', 'received');
+    }
     public function scopeApproved($q)
     {
         return $q->where('status', 'approved');
     }
+
 
     public function createdBy(): BelongsTo
     {
@@ -77,10 +82,32 @@ class Purchase extends Model
         return $this->hasMany(PurchaseReturn::class);
     }
 
+
+
     protected function trueBalance(): Attribute
     {
-        return Attribute::get(
-            fn() => (float)$this->grand_total - (float)$this->paid_total - (float)$this->returns_total
-        );
+        return Attribute::get(function () {
+            // Si la compra no está recibida, su balance "válido" es 0
+            if ($this->status !== 'received') {
+                return 0.0;
+            }
+
+            // Toma la suma precargada si viene en la query, si no, suma on-demand
+            $returnsAttr = $this->getAttribute('returns_total'); // null si no fue withSum
+            $returns = $returnsAttr !== null
+                ? (float) $returnsAttr
+                : (float) $this->returns()->sum('total_value');
+
+            $grand = (float) $this->grand_total;
+            $paid  = (float) $this->paid_total;
+
+            // Evita negativos
+            return max(0, $grand - $paid - $returns);
+        });
+    }
+
+    public function emailLogs(): HasMany
+    {
+        return $this->hasMany(PurchaseEmailLog::class);
     }
 }

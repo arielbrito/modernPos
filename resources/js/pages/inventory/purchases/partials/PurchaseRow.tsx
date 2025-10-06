@@ -8,12 +8,26 @@ import { usePurchaseActions } from "../hooks/usePurchaseActions";
 import { money, toNum } from "@/utils/inventory";
 import { fmtDate } from "@/utils/date";
 import PurchaseController from "@/actions/App/Http/Controllers/Inventory/PurchaseController";
+import { Badge } from "@/components/ui/badge";
 
+
+
+function EmailStatus({ status }: { status?: string | null }) {
+    if (!status) return <Badge variant="secondary">Nunca</Badge>;
+    if (status === 'sent') return <Badge className="bg-emerald-600">Enviado</Badge>;
+    if (status === 'queued') return <Badge className="bg-amber-600">En cola</Badge>;
+    if (status === 'failed') return <Badge variant="destructive">Fallido</Badge>;
+    return <Badge variant="secondary">{status}</Badge>;
+}
 interface Props {
-    purchase: Purchase & { returns_total: number | null; true_balance: number };
+    purchase: Purchase & {
+        returns_total: number | null,
+        true_balance: number,
+        last_email_at?: string | null,
+        last_email_status?: string | null,
+    };
     actions: ReturnType<typeof usePurchaseActions>;
 }
-
 export const PurchaseRow = React.memo(({ purchase, actions }: Props) => {
     const isApproving = actions.loadingStates.approving === purchase.id;
     const isCancelling = actions.loadingStates.cancelling === purchase.id;
@@ -70,6 +84,14 @@ export const PurchaseRow = React.memo(({ purchase, actions }: Props) => {
                     }`}
             >
                 {money(trueBalance)}
+            </TableCell>
+            <TableCell className="text-right">
+                <div className="flex flex-col items-end gap-1">
+                    <EmailStatus status={(purchase as any).last_email_status} />
+                    <div className="text-xs text-muted-foreground">
+                        {(purchase as any).last_email_at ? fmtDate((purchase as any).last_email_at) : '—'}
+                    </div>
+                </div>
             </TableCell>
 
             <TableCell className="text-right">

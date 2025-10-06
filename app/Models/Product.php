@@ -66,6 +66,11 @@ class Product extends Model
         $query->where('is_active', true);
     }
 
+    public function scopeStockable(Builder $q): void
+    {
+        $q->where('product_nature', ProductNature::STOCKABLE);
+    }
+
     // --- MÉTODOS AUXILIARES ---
 
     /**

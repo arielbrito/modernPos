@@ -30,7 +30,9 @@ use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\PurchaseItemsExport;
 use App\Exports\PurchasesIndexExport;
 use App\Http\Requests\Inventory\Purchase\EmailPurchaseRequest;
+use App\Jobs\SendPurchaseOrderEmail;
 use App\Mail\PurchaseOrderMail;
+use App\Models\PurchaseEmailLog;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 
@@ -47,47 +49,106 @@ class PurchaseController extends Controller
      */
     public function index(Request $request)
     {
-        // Obtenemos los filtros de la URL. 'search' puede ser nulo.
-        $filters = $request->only('search');
+        $filters = $request->validate([
+            'search' => ['nullable', 'string'],
+            'status' => ['nullable', 'string'],
+            'email'  => ['nullable', 'in:all,sent,queued,failed,never'],
+        ]);
 
-        $purchases = Purchase::query()
-            // Cargamos la relación con el proveedor para evitar problemas N+1
-            ->with('supplier')
-            ->withSum('returns as returns_total', 'total_value')
-            // Aplicamos el filtro de búsqueda solo si existe en la solicitud
-            ->when($request->input('search'), function ($query, $search) {
-                $query->where(function ($q) use ($search) {
-                    // Buscamos en el código de la compra
-                    $q->where('code', 'like', "%{$search}%")
-                        // O buscamos en el nombre del proveedor a través de la relación
-                        ->orWhereHas('supplier', function ($supplierQuery) use ($search) {
-                            $supplierQuery->where('name', 'like', "%{$search}%");
-                        });
-                });
-            })
-            // Ordenamos por los más recientes
-            ->latest()
-            // Paginamos los resultados
-            ->paginate(20)
-            // ¡Importante! Agrega los parámetros de la URL a los links de paginación
+        $search = trim($filters['search'] ?? '');
+        $status = $filters['status'] ?? 'all';
+        $email  = $filters['email']  ?? 'all';
+
+        // --- devoluciones por compra
+        $returnsAgg = DB::table('purchase_returns')
+            ->selectRaw('purchase_id, COALESCE(SUM(total_value),0) AS returns_total')
+            ->groupBy('purchase_id');
+
+        // --- último email por compra
+        $emailAgg = DB::table('purchase_email_logs AS el')
+            ->selectRaw("
+            el.purchase_id,
+            MAX(el.created_at) AS last_email_at,
+            (ARRAY_AGG(el.status ORDER BY el.created_at DESC))[1] AS last_email_status
+        ")
+            ->groupBy('el.purchase_id');
+
+        // --- BASE con joins y filtros, SIN select aún
+        $base = Purchase::query()
+            ->leftJoinSub($returnsAgg, 'ret', fn($j) => $j->on('ret.purchase_id', '=', 'purchases.id'))
+            ->leftJoinSub($emailAgg,   'em',  fn($j) => $j->on('em.purchase_id',  '=', 'purchases.id'))
+            ->with(['supplier']);
+
+        if ($search !== '') {
+            $base->where(function ($q) use ($search) {
+                $q->where('purchases.code', 'ILIKE', "%{$search}%")
+                    ->orWhere('purchases.invoice_number', 'ILIKE', "%{$search}%")
+                    ->orWhereHas('supplier', fn($qq) => $qq->where('name', 'ILIKE', "%{$search}%"));
+            });
+        }
+
+        if ($status !== 'all') {
+            $base->where('purchases.status', $status);
+        }
+
+        if ($email !== 'all') {
+            switch ($email) {
+                case 'never':
+                    $base->whereNull('em.last_email_at');
+                    break;
+                case 'sent':
+                case 'queued':
+                case 'failed':
+                    $base->where('em.last_email_status', $email);
+                    break;
+            }
+        }
+
+        // --- KPI/TOTALES (agregados en una consulta SEPARADA)
+        $forTotals = (clone $base)
+            ->cloneWithout(['columns', 'orders']) // quita selects y orders previos si los hubiera
+            ->selectRaw('COALESCE(SUM(purchases.grand_total),0) AS total_purchased_in_period')
+            ->selectRaw('COALESCE(SUM(purchases.grand_total - COALESCE(purchases.paid_total,0) - COALESCE(ret.returns_total,0)),0) AS total_balance')
+            ->first();
+
+        $draftCount = (clone $base)
+            ->cloneWithout(['columns', 'orders'])
+            ->where('purchases.status', 'draft')
+            ->count('purchases.id');
+
+        // --- LISTA (paginada) con columnas por fila (SIN agregados globales)
+        $list = (clone $base)
+            ->select('purchases.*')
+            ->selectRaw('COALESCE(ret.returns_total,0) AS returns_total')
+            ->selectRaw('COALESCE(em.last_email_at, NULL) AS last_email_at')
+            ->selectRaw('COALESCE(em.last_email_status, NULL) AS last_email_status')
+            ->selectRaw('(purchases.grand_total - COALESCE(purchases.paid_total,0) - COALESCE(ret.returns_total,0)) AS true_balance')
+            ->orderByDesc('purchases.created_at')
+            ->paginate(15)
             ->withQueryString();
 
-        // ✅ inyectamos true_balance por ítem
-        $purchases->getCollection()->transform(function ($p) {
-            $grand   = (float) $p->grand_total;
-            $paid    = (float) $p->paid_total;
-            $returns = (float) ($p->returns_total ?? 0);
-            // si quieres no permitir negativos, usa max(0, …)
-            $p->true_balance = max(0, $grand - $paid - $returns);
+        // normaliza tipos numéricos para el front
+        $list->getCollection()->transform(function ($p) {
+            $p->returns_total = (float) ($p->returns_total ?? 0);
+            $p->true_balance  = (float) ($p->true_balance ?? 0);
             return $p;
         });
 
-        return inertia('inventory/purchases/index', [
-            'compras' => $purchases,
-            // Pasamos los filtros de vuelta a la vista para mantener el estado del input
-            'filters' => $request->only(['search', 'status'])
+        return Inertia::render('inventory/purchases/index', [
+            'compras' => $list,
+            'filters' => [
+                'search' => $search,
+                'status' => $status,
+                'email'  => $email,
+            ],
+            'stats' => [
+                'totalPurchasedInPeriod' => (float) $forTotals->total_purchased_in_period,
+                'totalBalance'           => (float) $forTotals->total_balance,
+                'draftCount'             => $draftCount,
+            ],
         ]);
     }
+
 
     /**
      * Show the form for creating a new resource.
@@ -235,8 +296,12 @@ class PurchaseController extends Controller
         }
 
         $products = Product::with('variants')
-            ->where('name', 'ILIKE', "%{$term}%")
-            ->orWhereHas('variants', fn($q) => $q->where('sku', 'ILIKE', "%{$term}%"))
+            ->active()
+            ->stockable()
+            ->where(function ($q) use ($term) {
+                $q->where('name', 'ILIKE', "%{$term}%")
+                    ->orWhereHas('variants', fn($vq) => $vq->where('sku', 'ILIKE', "%{$term}%"));
+            })
             ->take(10)
             ->get();
 
@@ -494,67 +559,97 @@ class PurchaseController extends Controller
 
 
 
-    public function email(Purchase $purchase, Request $request)
+    public function sendEmail(Request $request, Purchase $purchase)
     {
-        $this->authorize('view', $purchase); // o la policy adecuada
+        $this->authorize('view', $purchase);
 
-        // Permite strings (separados por coma) o arrays para to/cc/bcc
-        $normalize = function (mixed $v): array {
-            if (is_array($v)) return array_filter(array_map('trim', $v));
-            if (is_string($v)) return array_filter(array_map('trim', explode(',', $v)));
-            return [];
-        };
-
-        $data = $request->validate([
-            'to'      => ['required'],
-            'cc'      => ['nullable'],
-            'bcc'     => ['nullable'],
-            'subject' => ['nullable', 'string', 'max:150'],
-            'message' => ['nullable', 'string', 'max:3000'],
-            'paper'   => ['nullable', Rule::in(['letter', 'a4'])],
+        $validated = $request->validate([
+            'to'      => ['required', 'email'],
+            'cc'      => ['nullable', 'email'],
+            'subject' => ['required', 'string', 'max:120'],
+            'message' => ['nullable', 'string', 'max:2000'],
+            'paper'   => ['nullable', Rule::in(['a4', 'letter'])],
+            'copy'    => ['nullable', Rule::in(['0', '1'])],
+            'queue'   => ['nullable', 'boolean'],
         ]);
 
-        $to  = $normalize($data['to']);
-        $cc  = $normalize($data['cc'] ?? null);
-        $bcc = $normalize($data['bcc'] ?? null);
+        // Normalizaciones
+        $enqueue = $request->boolean('queue');                 // false si no viene
+        $paper   = $validated['paper'] ?? 'letter';
+        $isCopy  = ($validated['copy'] ?? '0') === '1';
 
-        // Valida cada email individualmente
-        $validateEmail = fn(string $e) => validator(['e' => $e], ['e' => 'email:rfc,dns'])->passes();
-        foreach (['to' => $to, 'cc' => $cc, 'bcc' => $bcc] as $k => $list) {
-            foreach ($list as $email) {
-                if (!$validateEmail($email)) {
-                    throw ValidationException::withMessages([$k => "Correo inválido: {$email}"]);
-                }
-            }
+        // Cargar relaciones para el PDF
+        $purchase->load(['supplier', 'items.productVariant.product', 'store']);
+
+        // Generar PDF
+        $pdf = Pdf::loadView('prints.purchase_order', [
+            'purchase' => $purchase,
+            'isCopy'   => $isCopy,
+        ])->setPaper($paper);
+
+        // Escribir a storage con nombre único (queue-friendly)
+        $dir      = 'tmp/purchase-orders';
+        Storage::makeDirectory($dir);
+        $uuid     = Str::orderedUuid()->toString();
+        $filename = "orden-{$purchase->code}-{$uuid}.pdf";
+        $path     = "{$dir}/{$filename}";
+        Storage::put($path, $pdf->output());
+
+        // Crear log inicial
+        $log = PurchaseEmailLog::create([
+            'purchase_id' => $purchase->id,
+            'user_id'     => $request->user()->id ?? null,
+            'to'          => $validated['to'],
+            'cc'          => $validated['cc'] ?? null,
+            'subject'     => $validated['subject'],
+            'queued'      => $enqueue,
+            'status'      => $enqueue ? 'queued' : 'sent',
+            'attachment'  => $path,          // <- guarda dónde está el PDF
+            // 'sent_at'   => null (lo pondrá el job o el flujo síncrono)
+        ]);
+
+        if ($enqueue) {
+            // Envío en COLA (el Job borrará el archivo y actualizará el log)
+            SendPurchaseOrderEmail::dispatch(
+                logId: $log->id,
+                purchaseId: $purchase->id,
+                to: $validated['to'],
+                cc: $validated['cc'] ?? null,
+                subject: $validated['subject'],
+                body: $validated['message'] ?? '',
+                storagePath: $path,
+                // filename: $filename,
+            );
+
+            return back()->with('success', 'Orden encolada para envío por email.');
         }
 
-        if (empty($to)) {
-            throw ValidationException::withMessages(['to' => 'Debes indicar al menos un destinatario.']);
-        }
-
-        $paper = $data['paper'] ?? 'letter';
-        $body  = $data['message'] ?? '';
-
-        // Envía en cola si hay queue configurada, si no envía en vivo
-        $mailable = (new PurchaseOrderMail($purchase, $body, $paper))
-            ->subject($data['subject'] ?? "Orden de compra {$purchase->code}");
-
-        $mailer = Mail::to($to);
-        if (!empty($cc))  $mailer->cc($cc);
-        if (!empty($bcc)) $mailer->bcc($bcc);
-
-        // Usa queue si está configurado
+        // Envío SÍNCRONO
         try {
-            if (config('queue.default') && config('queue.default') !== 'sync') {
-                $mailer->queue($mailable);
-            } else {
-                $mailer->send($mailable);
-            }
-        } catch (\Throwable $e) {
-            report($e);
-            return back()->with('error', 'No se pudo enviar el correo. Intenta nuevamente.');
-        }
+            $mailable = (new PurchaseOrderMail(
+                purchase: $purchase,
+                subjectLine: $validated['subject'],
+                bodyMessage: $validated['message'] ?? ''
+            ))->attachFromStorage($path, $filename, ['mime' => 'application/pdf']);
 
-        return back()->with('success', 'Correo enviado correctamente.');
+            Mail::to($validated['to'])
+                ->when(!empty($validated['cc']), fn($m) => $m->cc($validated['cc']))
+                ->send($mailable);
+
+            $log->status  = 'sent';
+            $log->sent_at = now();
+            $log->save();
+
+            return back()->with('success', 'Orden enviada por email.');
+        } catch (\Throwable $e) {
+            $log->status = 'failed';
+            $log->error  = $e->getMessage();
+            $log->save();
+
+            return back()->with('error', 'No se pudo enviar el email: ' . $e->getMessage());
+        } finally {
+            // En síncrono lo limpiamos aquí (en cola lo limpia el Job)
+            Storage::delete($path);
+        }
     }
 }
