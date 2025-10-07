@@ -37,8 +37,8 @@ class SendPurchaseOrderEmail implements ShouldQueue
 
         $mailable = (new PurchaseOrderMail(
             purchase: $purchase,
-            subject: $this->subject,
-            body: $this->body
+            subjectLine: $this->subject,
+            bodyMessage: $this->body
         ))->attachFromStorage($this->storagePath, $filename, ['mime' => 'application/pdf']);
 
         Mail::to($this->to)
