@@ -20,6 +20,7 @@
         "league/csv": "^9.24",
         "league/flysystem-aws-s3-v3": "3.0",
         "maatwebsite/excel": "^3.1",
+        "resend/resend-laravel": "^0.22.0",
         "simplesoftwareio/simple-qrcode": "^4.2",
         "spatie/laravel-permission": "^6.21"
     },
