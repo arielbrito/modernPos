@@ -56,7 +56,7 @@ class DgiiSyncController extends Controller // <- nombre consistente
         $fileName = "{$safeBase}{$suffix}-" . Str::uuid() . ".{$ext}";    // ...-uuid.tar.gz  ó ...-uuid.gz
 
         // 👉 usa disco compartido (configurable)
-        $disk = config('dgii_sync.disk', 's3'); // o 'dgii'
+        $disk = config('filesystems.default');
         $relativePath = Storage::disk($disk)->putFileAs('padron-uploads', $file, $fileName);
 
         $cacheKey = 'dgii_sync_status_' . Str::uuid();
