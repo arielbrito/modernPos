@@ -26,12 +26,11 @@ class DgiiSyncController extends Controller // <- nombre consistente
      */
     public function store(Request $request)
     {
-        // Límite configurable (MB) para protección temprana
         $maxUploadMb = (int) config('dgii_sync.max_upload_mb', 256);
 
         $request->validate([
-            // Acepta csv/txt y gz (por si viene comprimido)
-            'padron_file'    => ['required', 'file', 'mimes:csv,txt,gz', "max:" . ($maxUploadMb * 1024)], // max en KB
+            // acepta .csv .txt y .tar.gz (pasa como gz)
+            'padron_file'    => ['required', 'file', 'mimes:csv,txt,gz', "max:" . ($maxUploadMb * 1024)],
             'source_version' => ['nullable', 'string', 'max:100'],
             'padron_date'    => ['nullable', 'date'],
             'limit'          => ['nullable', 'integer', 'min:1'],
@@ -39,86 +38,67 @@ class DgiiSyncController extends Controller // <- nombre consistente
             'sync_customers' => ['sometimes', 'boolean'],
         ]);
 
-        // Validación adicional por tamaño (por si cambia php.ini)
-        $sizeBytes = (int) $request->file('padron_file')->getSize();
-        $sizeMb    = $sizeBytes / 1024 / 1024;
+        $file     = $request->file('padron_file');
+        $sizeMb   = $file->getSize() / 1024 / 1024;
         if ($sizeMb > $maxUploadMb) {
             return back()->withErrors([
-                'padron_file' => "El archivo pesa " . number_format($sizeMb, 1) . " MB y excede el límite de {$maxUploadMb} MB.",
-            ])->onlyInput('padron_file');
+                'padron_file' => "El archivo pesa " . number_format($sizeMb, 1) . " MB y excede {$maxUploadMb} MB."
+            ]);
         }
 
-        try {
-            // Normaliza nombre y ruta sin tildes/espacios raros
-            $originalName = $request->file('padron_file')->getClientOriginalName();
-            $safeName     = Str::slug(pathinfo($originalName, PATHINFO_FILENAME));
-            $ext          = strtolower($request->file('padron_file')->getClientOriginalExtension());
-            $fileName     = $safeName . '-' . Str::uuid()->toString() . '.' . $ext;
+        // ⚠️ Preservar .tar.gz si existe
+        $original = $file->getClientOriginalName();                   // p.ej. RNC_Contribuyentes_...tar.gz
+        $base     = pathinfo($original, PATHINFO_FILENAME);           // RNC_Contribuyentes_...tar
+        $ext      = strtolower($file->getClientOriginalExtension());  // "gz"
+        // si termina en ".tar", conserva el sufijo
+        $suffix   = str_ends_with($base, '.tar') ? '.tar' : '';
+        $safeBase = Str::slug(str_replace('.tar', '', $base));          // slug del nombre sin el .tar
+        $fileName = "{$safeBase}{$suffix}-" . Str::uuid() . ".{$ext}";    // ...-uuid.tar.gz  ó ...-uuid.gz
 
-            // Evita tildes en la carpeta
-            $relativePath = $request->file('padron_file')->storeAs('padron-uploads', $fileName);
-            $absolutePath = Storage::path($relativePath);
+        // 👉 usa disco compartido (configurable)
+        $disk = config('dgii_sync.disk', 's3'); // o 'dgii'
+        $relativePath = Storage::disk($disk)->putFileAs('padron-uploads', $file, $fileName);
 
-            // Cache key única para la UI
-            $cacheKey = 'dgii_sync_status_' . Str::uuid()->toString();
+        $cacheKey = 'dgii_sync_status_' . Str::uuid();
 
-            // Estado inicial para la UI (la vista ya puede empezar a sondear)
-            $initialStatus = [
-                'status'   => 'pending',
-                'message'  => 'Proceso en cola, esperando ser procesado por el worker...',
-                'progress' => 0,
-                'log'      => [now()->format('H:i:s') . ' - Proceso despachado a la cola.'],
-                'stats'    => [
-                    'original_name' => $originalName,
-                    'stored_path'   => $relativePath,
-                    'size_mb'       => number_format($sizeMb, 2),
-                    'started_at'    => now()->toISOString(),
-                ],
-            ];
-            Cache::store('database')->put($cacheKey, $initialStatus, now()->addHour()); // 👈
+        Cache::store('database')->put($cacheKey, [
+            'status'   => 'pending',
+            'message'  => 'Proceso en cola, esperando ser procesado por el worker...',
+            'progress' => 0,
+            'log'      => [now()->format('H:i:s') . ' - Proceso despachado a la cola.'],
+            'stats'    => [
+                'original_name' => $original,
+                'stored_path'   => $relativePath,
+                'size_mb'       => number_format($sizeMb, 2),
+                'started_at'    => now()->toISOString(),
+            ],
+        ], now()->addHour());
 
-            // Opciones hacia el Job
-            $options = [
-                'dry_run'        => $request->boolean('dry_run'),
-                'sync_customers' => $request->boolean('sync_customers', true),
-                'source_version' => $request->input('source_version'),
-                'padron_date'    => $request->input('padron_date'),
-                'limit'          => $request->integer('limit'),
+        $options = [
+            'dry_run'        => $request->boolean('dry_run'),
+            'sync_customers' => $request->boolean('sync_customers', true),
+            'source_version' => $request->input('source_version'),
+            'padron_date'    => $request->input('padron_date'),
+            'limit'          => $request->integer('limit'),
+            'tickEvery'      => (int) config('dgii_sync.tick_every', 1000),
+            'bufferUpsert'   => (int) config('dgii_sync.buffer_upsert', 1000),
+            'commitEvery'    => (int) config('dgii_sync.commit_every', 10000),
+        ];
 
-                // Tunables opcionales (puedes exponerlos en .env/config):
-                'tickEvery'      => (int) config('dgii_sync.tick_every', 1000),
-                'bufferUpsert'   => (int) config('dgii_sync.buffer_upsert', 1000),
-                'commitEvery'    => (int) config('dgii_sync.commit_every', 10000),
-            ];
+        Log::info("DgiiSync: encolando import. key={$cacheKey}", [
+            'disk' => $disk,
+            'path' => $relativePath,
+            'size_mb' => $sizeMb,
+            'options' => $options,
+        ]);
 
-            Log::info("DgiiSync: encolando import. key={$cacheKey}", [
-                'path'    => $relativePath,
-                'size_mb' => $sizeMb,
-                'options' => $options,
-            ]);
+        // 👇 Pasa DISK + PATH (no una ruta local absoluta)
+        ProcessDgiiPadron::dispatch($disk, $relativePath, $options, $cacheKey);
 
-            ProcessDgiiPadron::dispatch($absolutePath, $options, $cacheKey);
-
-            if ($request->expectsJson()) {
-                return response()->json([
-                    'ok' => true,
-                    'sync_cache_key' => $cacheKey,
-                    'message' => 'El proceso ha comenzado en segundo plano.',
-                ]);
-            }
-
-            return redirect()->back()->with([
-                'success'        => 'El proceso ha comenzado en segundo plano.',
-                'sync_cache_key' => $cacheKey,
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('Error al despachar el job de sincronización DGII', [
-                'message' => $e->getMessage(),
-                'trace'   => $e->getTraceAsString(),
-            ]);
-
-            return back()->withErrors(['error' => 'No se pudo iniciar el proceso de importación. Inténtalo de nuevo.']);
-        }
+        return redirect()->back()->with([
+            'success'        => 'El proceso ha comenzado en segundo plano.',
+            'sync_cache_key' => $cacheKey,
+        ]);
     }
 
     /**
@@ -162,11 +142,13 @@ class DgiiSyncController extends Controller // <- nombre consistente
         $key = $request->query('key');
         if (!$key) abort(422, 'Falta key');
 
-        $meta = Cache::store('database')->get($key . ':meta'); // si guardas meta al encolar
+        $meta = Cache::store('database')->get($key . ':meta');
+        $disk = $meta['disk'] ?? config('dgii_sync.disk', 's3');
         $path = $meta['path'] ?? null;
-        if (!$path || !Storage::disk('local')->exists($path)) {
+
+        if (!$path || !Storage::disk($disk)->exists($path)) {
             abort(404, 'Archivo no disponible');
         }
-        return Storage::disk('local')->download($path);
+        return Storage::disk($disk)->download($path);
     }
 }

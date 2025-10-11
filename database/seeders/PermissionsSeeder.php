@@ -81,6 +81,9 @@ class PermissionsSeeder extends Seeder
                 'sales.discount.override',
                 'sales_returns.view',
                 'sales_returns.create',
+                'sales_returns.update',
+                'sales_returns.delete',
+                'sales_returns.export',
                 'sales_returns.approve',
 
             ],

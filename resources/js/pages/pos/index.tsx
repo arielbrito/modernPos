@@ -95,6 +95,8 @@ export default function PosPage() {
         setLastSale(null);
     };
 
+    console.log(receipt_settings)
+
     // --- 5. Renderizado del Layout y Componentes ---
     return (
         <AppLayout>

@@ -17,6 +17,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import SaleController from "@/actions/App/Http/Controllers/Sales/SaleController";
 import SalePrintController from "@/actions/App/Http/Controllers/Sales/SalePrintController";
 import SaleExportController from "@/actions/App/Http/Controllers/Sales/SaleExportController";
+import SaleReturnController from "@/actions/App/Http/Controllers/Sales/SaleReturnController";
 
 // Tipos para mejor type safety
 interface Sale {
@@ -435,6 +436,7 @@ export default function SalesIndex() {
                                                         )} className="cursor-pointer" title="imprimir recibo">
                                                         <Printer className="w-4 h4" />
                                                     </Button>
+                                                    <Button size="sm" onClick={() => router.visit(SaleReturnController.create.url({ sale: Number(sale.id) }))}>Devolver</Button>
                                                 </div>
                                             </td>
                                         </tr>

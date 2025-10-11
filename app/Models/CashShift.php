@@ -31,7 +31,7 @@ class CashShift extends Model
 
     public function register(): BelongsTo
     {
-        return $this->belongsTo(Register::class);
+        return $this->belongsTo(Register::class, 'register_id');
     }
     public function openedBy(): BelongsTo
     {
@@ -53,6 +53,11 @@ class CashShift extends Model
     public function scopeOpen(Builder $q): Builder
     {
         return $q->where('status', 'open')->whereNull('closed_at');
+    }
+
+    public function isOpen(): bool
+    {
+        return ($this->status === 'open');
     }
 
     public function getExpectedTotals(): Collection

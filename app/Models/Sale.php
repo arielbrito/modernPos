@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Policies\SalePolicy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 
+#[UsePolicy(SalePolicy::class)]
 class Sale extends Model
 {
     protected $fillable = [

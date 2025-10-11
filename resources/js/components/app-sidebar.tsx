@@ -60,6 +60,8 @@ import PurchaseReturnController from '@/actions/App/Http/Controllers/Inventory/P
 import roles from '@/routes/settings/roles';
 import alerts from '@/routes/settings/alerts';
 import receipts from '@/routes/settings/receipts';
+import shifts from '@/routes/cash/shifts';
+import SaleReturnController from '@/actions/App/Http/Controllers/Sales/SaleReturnController';
 
 
 /**
@@ -99,7 +101,8 @@ const mainNavItems: NavItem[] = [
         permission: 'sales.view', // Ejemplo de permisos, ajustar según necesidades
         children: [
             { title: 'Listado de Ventas', href: sales.index.url(), icon: DollarSign },
-            // { title: 'Devoluciones de Venta', href: returns.index.url(), icon: ArrowLeftRight },
+            { title: 'Devoluciones de Venta', href: SaleReturnController.index.url(), icon: ArrowLeftRight },
+            { title: 'Cierres de caja', href: shifts.index.url(), icon: ArrowLeftRight },
         ],
     },
     {
